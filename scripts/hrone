@@ -23,7 +23,7 @@ HROne 관리 명령
   hrone allow-all-ips       IP 접속 제한 해제 (잠겼을 때)
   hrone private-ips         사설망/Tailscale 만 허용 (기본값)
   hrone set-port <포트>     패널 포트 변경
-  hrone uninstall           제거 (데이터는 남김, --purge 로 전부 삭제)
+  hrone uninstall           제거 (데이터는 남김, --purge 로 전부 삭제, --yes 로 확인 생략)
 USAGE
 }
 

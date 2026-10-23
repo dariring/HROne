@@ -5,12 +5,20 @@ set -euo pipefail
 # shellcheck disable=SC1091
 . /etc/hrone.env
 PURGE=0
-[ "${1:-}" = "--purge" ] && PURGE=1
+YES=0
+for a in "$@"; do
+  case "$a" in
+    --purge) PURGE=1 ;;
+    --yes | -y) YES=1 ;;
+  esac
+done
 
 echo "HROne 패널과 모든 앱/DB 서비스를 중지하고 제거합니다."
 [ "$PURGE" = 1 ] && echo -e "\033[1;31m--purge: $HRONE_DATA (앱 코드, DB 데이터, 백업) 도 전부 삭제됩니다!\033[0m"
-read -r -p "계속하려면 '삭제' 를 입력하세요: " ans </dev/tty
-[ "$ans" = "삭제" ] || { echo "취소했습니다."; exit 1; }
+if [ "$YES" != 1 ]; then
+  read -r -p "계속하려면 '삭제' 를 입력하세요: " ans </dev/tty
+  [ "$ans" = "삭제" ] || { echo "취소했습니다."; exit 1; }
+fi
 
 for u in $(systemctl list-unit-files --no-legend 'hrone-app-*' 'hrone-db-*' | awk '{print $1}'); do
   systemctl disable --now "$u" >/dev/null 2>&1 || true
