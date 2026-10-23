@@ -1,0 +1,146 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'D2Coding', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --color-bg: #0a0c11;
+  --color-surface: #11141b;
+  --color-surface-2: #161a23;
+  --color-surface-3: #1c212c;
+  --color-line: #232836;
+  --color-line-2: #2e3445;
+  --color-fg: #e7e9ef;
+  --color-fg-2: #b5bbc9;
+  --color-muted: #7e869a;
+  --color-accent: #7c5cff;
+  --color-accent-2: #9b83ff;
+  --color-ok: #34d399;
+  --color-warn: #fbbf24;
+  --color-bad: #f87171;
+  --color-info: #60a5fa;
+}
+
+@layer base {
+  html,
+  body {
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: 'tnum' 1;
+  }
+  /* 사용자 요청: 어디에도 기울임꼴을 쓰지 않는다 */
+  i,
+  em,
+  cite,
+  var,
+  address,
+  dfn {
+    font-style: normal;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--color-accent) 45%, transparent);
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-2) transparent;
+  }
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+  code,
+  kbd,
+  pre {
+    font-family: var(--font-mono);
+  }
+}
+
+@layer components {
+  .card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: 14px;
+  }
+  .input {
+    width: 100%;
+    background: var(--color-bg);
+    border: 1px solid var(--color-line-2);
+    border-radius: 9px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .input:focus {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 25%, transparent);
+  }
+  .input:disabled {
+    opacity: 0.6;
+  }
+  .label {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-fg-2);
+    margin-bottom: 0.375rem;
+  }
+  .hint {
+    font-size: 0.75rem;
+    color: var(--color-muted);
+    margin-top: 0.375rem;
+    line-height: 1.5;
+  }
+  .mono {
+    font-family: var(--font-mono);
+  }
+  .tab-active {
+    color: var(--color-fg);
+    border-color: var(--color-accent);
+  }
+}
+
+.log-line:hover {
+  background: color-mix(in oklab, var(--color-surface-3) 70%, transparent);
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.pulse {
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes toast-in {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.toast-in {
+  animation: toast-in 0.18s ease-out;
+}

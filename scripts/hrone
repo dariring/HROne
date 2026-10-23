@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# HROne 관리 명령 (/usr/local/bin/hrone)
+set -euo pipefail
+if [ "$(id -u)" -ne 0 ]; then exec sudo "$0" "$@"; fi
+# shellcheck disable=SC1091
+. /etc/hrone.env
+NODE="$HRONE_DATA/runtimes/node-panel/bin/node"
+cli() { HRONE_DATA="$HRONE_DATA" "$NODE" --disable-warning=ExperimentalWarning "$HRONE_DIR/server/cli.ts" "$@"; }
+
+usage() {
+  cat <<'USAGE'
+HROne 관리 명령
+
+  hrone status              패널 상태 + 접속 주소
+  hrone url                 접속 주소
+  hrone logs                패널 로그 (실시간)
+  hrone restart|stop|start  패널 재시작/정지/시작 (앱과 DB 는 영향 없음)
+  hrone update              최신 버전으로 업데이트
+  hrone list                앱/DB 서비스 목록
+  hrone app-logs <앱ID>     앱 콘솔 (실시간)
+  hrone reset-password [아이디]   비밀번호 재설정 (기본 admin)
+  hrone disable-2fa <아이디>      OTP 해제
+  hrone allow-all-ips       IP 접속 제한 해제 (잠겼을 때)
+  hrone private-ips         사설망/Tailscale 만 허용 (기본값)
+  hrone set-port <포트>     패널 포트 변경
+  hrone uninstall           제거 (데이터는 남김, --purge 로 전부 삭제)
+USAGE
+}
+
+case "${1:-help}" in
+  status)
+    systemctl --no-pager status hrone | head -5 || true
+    echo
+    cli info
+    ;;
+  url | info) cli info ;;
+  logs) journalctl -u hrone -f -n 100 ;;
+  restart | stop | start) systemctl "$1" hrone ;;
+  update) bash "$HRONE_DIR/scripts/update.sh" ;;
+  list)
+    printf '%-34s %-10s %-10s\n' "서비스" "자동시작" "상태"
+    for u in $(systemctl list-unit-files --no-legend 'hrone*.service' | awk '{print $1}'); do
+      printf '%-34s %-10s %-10s\n' "$u" "$(systemctl is-enabled "$u" 2>/dev/null)" "$(systemctl is-active "$u" 2>/dev/null)"
+    done
+    ;;
+  app-logs)
+    [ -n "${2:-}" ] || { echo "앱 ID 를 지정하세요"; exit 1; }
+    journalctl -f -n 200 "_SYSTEMD_UNIT=hrone-app-$2.service" + "UNIT=hrone-app-$2.service" + "HRONE_UNIT=hrone-app-$2.service"
+    ;;
+  reset-password) cli reset-password "${2:-admin}" ;;
+  disable-2fa)
+    [ -n "${2:-}" ] || { echo "아이디를 지정하세요"; exit 1; }
+    cli disable-2fa "$2"
+    ;;
+  allow-all-ips) cli allow-all-ips ;;
+  private-ips) cli private-ips ;;
+  set-port)
+    cli set-port "${2:-}"
+    systemctl restart hrone
+    ;;
+  uninstall) bash "$HRONE_DIR/scripts/uninstall.sh" "${@:2}" ;;
+  help | -h | --help) usage ;;
+  *)
+    usage
+    exit 1
+    ;;
+esac
