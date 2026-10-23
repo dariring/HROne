@@ -35,6 +35,8 @@ export interface AppConfig {
   /** 빌드 뒤, 재시작 전에 실행 (마이그레이션 등) */
   releaseCmd: string;
   installAlways: boolean;
+  /** npm 11 / pnpm 10 은 의존성 설치 스크립트를 기본으로 막는다. true 면 예전처럼 실행 (sharp, bcrypt 등 네이티브 모듈) */
+  allowInstallScripts: boolean;
   port: number | null;
   publicUrl: string;
   writeDotenv: boolean;

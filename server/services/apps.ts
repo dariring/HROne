@@ -51,6 +51,7 @@ export function defaultConfig(): AppConfig {
     startCmd: '',
     releaseCmd: '',
     installAlways: false,
+    allowInstallScripts: true,
     port: null,
     publicUrl: '',
     writeDotenv: false,
@@ -198,6 +199,7 @@ export function normalizeConfig(input: Partial<AppConfig>, base: AppConfig): App
   c.startCmd = str(c.startCmd, 2000);
   c.releaseCmd = str(c.releaseCmd, 2000);
   c.installAlways = !!c.installAlways;
+  c.allowInstallScripts = c.allowInstallScripts !== false;
   c.port = c.port === null || c.port === undefined || (c.port as unknown) === '' ? null : clampInt(c.port, 1024, 65535, 3000);
   c.publicUrl = str(c.publicUrl, 300);
   c.writeDotenv = !!c.writeDotenv;
@@ -353,7 +355,14 @@ export function buildEnv(app: App, opts: { forBuild?: boolean } = {}): Record<st
   if (app.config.forceColor) env.FORCE_COLOR = '1';
   for (const v of linkedEnvFor(app.id)) env[v.key] = v.value;
   for (const v of getEnv(app.slug)) env[v.key] = v.value;
-  if (opts.forBuild) env.CI = env.CI ?? '1';
+  if (opts.forBuild) {
+    env.CI = env.CI ?? '1';
+    if (app.config.allowInstallScripts) {
+      // npm 11 의 allowScripts / pnpm 10 의 onlyBuiltDependencies 기본 차단을 끈다 (앱 전용 계정으로 실행됨)
+      env.npm_config_dangerously_allow_all_scripts = env.npm_config_dangerously_allow_all_scripts ?? 'true';
+      env.npm_config_dangerously_allow_all_builds = env.npm_config_dangerously_allow_all_builds ?? 'true';
+    }
+  }
   return env;
 }
 

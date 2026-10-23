@@ -152,6 +152,12 @@ export function AppSettings({ app, reload }: { app: AppDetailData; reload: () =>
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
           <Toggle checked={c.installAlways} onChange={(v) => set('installAlways', v)} label="배포마다 의존성 설치" sub="끄면 의존성 파일이 바뀔 때만 설치 (빠름)" />
+          <Toggle
+            checked={c.allowInstallScripts}
+            onChange={(v) => set('allowInstallScripts', v)}
+            label="패키지 설치 스크립트 허용"
+            sub="npm 11 / pnpm 10 은 기본으로 막습니다. sharp, bcrypt, prisma 같은 네이티브 모듈에 필요"
+          />
           <Toggle checked={c.forceColor} onChange={(v) => set('forceColor', v)} label="콘솔 색상 출력 (FORCE_COLOR=1)" />
           <Toggle checked={c.writeDotenv} onChange={(v) => set('writeDotenv', v)} label="앱 폴더에 .env 파일도 쓰기" sub="dotenv 처럼 파일을 직접 읽는 앱용. 환경변수는 항상 주입됩니다" />
           <Toggle checked={c.runAsRoot} onChange={(v) => set('runAsRoot', v)} label="root 로 실행" sub="권장하지 않음. 기본은 앱 전용 계정 hr-ID" />

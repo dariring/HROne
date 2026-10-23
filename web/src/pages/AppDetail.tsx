@@ -63,6 +63,7 @@ export interface AppConfig {
   startCmd: string;
   releaseCmd: string;
   installAlways: boolean;
+  allowInstallScripts: boolean;
   port: number | null;
   publicUrl: string;
   writeDotenv: boolean;
