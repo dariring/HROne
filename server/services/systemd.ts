@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { run, tryRun } from '../lib/exec.ts';
@@ -61,6 +62,25 @@ export async function show(units: string[], props: string[]): Promise<Map<string
   return out;
 }
 
+let accounting: string[] | null = null;
+
+/**
+ * 유닛에 넣을 *Accounting= 지시어. systemd 258 부터 cgroup v1 지원이 빠지면서 CPU 사용량은 항상 집계되고
+ * CPUAccounting= 은 없어진 옵션이라 유닛을 읽을 때마다 경고가 남는다 (Ubuntu 26.04 = systemd 259).
+ */
+export function accountingDirectives(extra: string[] = []): string[] {
+  if (!accounting) {
+    let version = 0;
+    try {
+      version = Number(/systemd (\d+)/.exec(execFileSync('systemctl', ['--version'], { encoding: 'utf8', timeout: 10_000 }))?.[1] ?? 0);
+    } catch {
+      /* 알 수 없으면 예전처럼 쓴다 */
+    }
+    accounting = version >= 258 ? [] : ['CPUAccounting=yes'];
+  }
+  return [...accounting, 'MemoryAccounting=yes', ...extra];
+}
+
 /** 리소스 제한을 systemd 지시어로 */
 export function resourceDirectives(r: Resources | undefined): string[] {
   if (!r) return [];
@@ -97,10 +117,7 @@ function sliceUnit(desc: string, r: Resources) {
     'Before=slices.target',
     '',
     '[Slice]',
-    'CPUAccounting=yes',
-    'MemoryAccounting=yes',
-    'TasksAccounting=yes',
-    'IOAccounting=yes',
+    ...accountingDirectives(['TasksAccounting=yes', 'IOAccounting=yes']),
     ...resourceDirectives(r),
     '',
   ].join('\n');
