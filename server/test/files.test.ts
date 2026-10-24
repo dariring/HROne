@@ -141,7 +141,7 @@ test('웹 UI: index.html 은 캐시하지 않고 assets 는 오래 캐시', asyn
     assert.match(r.body, /<title>t<\/title>/);
   }
   assert.equal((await get('/assets/index-abc.js')).headers['cache-control'], 'public, max-age=31536000, immutable');
-  assert.equal((await get('/favicon.svg')).headers['cache-control'], 'public, max-age=3600');
+  assert.equal((await get('/favicon.svg')).headers['cache-control'], 'no-cache');
   assert.equal((await get('/api/nope')).statusCode, 404);
   await web.close();
 });
