@@ -1,5 +1,6 @@
 import { ArrowLeft, Eraser, KeyRound, Play, Plus, RotateCw, Save, SlidersHorizontal, Square, Terminal, Trash2, Unlock, Upload, UserPlus } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { DataBrowser } from '../components/DataBrowser';
 import { DangerDialog, JobDialog } from '../components/Dialogs';
 import type { Me } from '../components/Layout';
 import { LogViewer } from '../components/LogViewer';
@@ -66,10 +67,10 @@ interface DbDetailData extends DbSummary {
   dataDir: string;
 }
 
-type Tab = 'overview' | 'query' | 'schemas' | 'backups' | 'console' | 'settings';
+type Tab = 'overview' | 'data' | 'query' | 'backups' | 'console' | 'settings';
 
 // 예전 탭 주소로 들어와도 맞는 곳을 보여 준다
-const OLD_TABS: Record<string, Tab> = { limits: 'settings', danger: 'settings' };
+const OLD_TABS: Record<string, Tab> = { limits: 'settings', danger: 'settings', schemas: 'settings' };
 
 export function DbDetail({ slug, me }: { slug: string; me: Me }) {
   const { query } = useLocation();
@@ -150,11 +151,16 @@ export function DbDetail({ slug, me }: { slug: string; me: Me }) {
 
       <Tabs
         value={tab}
-        onChange={(t) => setQuery('tab', t === 'overview' ? null : t)}
+        onChange={(t) => {
+          // 데이터 탭의 위치(?schema, ?table)는 다른 탭으로 넘어가면 지운다
+          setQuery('schema', null);
+          setQuery('table', null);
+          setQuery('tab', t === 'overview' ? null : t);
+        }}
         tabs={[
           { value: 'overview', label: '개요' },
+          ...(maria ? [{ value: 'data' as Tab, label: '데이터' }] : []),
           { value: 'query', label: maria ? 'SQL 콘솔' : 'Redis 콘솔' },
-          ...(maria ? [{ value: 'schemas' as Tab, label: 'DB · 계정' }] : []),
           { value: 'backups', label: '백업' },
           { value: 'console', label: '로그' },
           { value: 'settings', label: '설정' },
@@ -164,11 +170,16 @@ export function DbDetail({ slug, me }: { slug: string; me: Me }) {
       {tab === 'overview' && <Overview db={db} running={st?.state === 'running'} reload={reload} />}
       {tab === 'console' && <LogViewer kind="db" slug={slug} />}
       {tab === 'query' && <QueryConsole db={db} />}
-      {tab === 'schemas' && maria && <Schemas db={db} me={me} />}
+      {tab === 'data' && maria && <DataBrowser slug={slug} defaultDb={db.config.defaultDb} running={st?.state === 'running'} />}
       {tab === 'backups' && <DbBackups db={db} me={me} reload={reload} />}
       {tab === 'settings' && (
         <div className="space-y-3">
           <DbSettings db={db} reload={reload} />
+          {maria && (
+            <Fold icon={<UserPlus size={16} />} title="DB · 계정 관리" summary="데이터베이스 만들기·지우기, 접속 계정 추가">
+              <Schemas db={db} me={me} />
+            </Fold>
+          )}
           <Fold icon={<Unlock size={16} />} title="연결 제한" summary={limitSummary(db)}>
             <Limits db={db} reload={reload} running={st?.state === 'running'} />
           </Fold>

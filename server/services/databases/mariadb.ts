@@ -325,6 +325,124 @@ export async function query(db: Db, text: string, database?: string) {
   return sql(db, text, { database, table: true, timeoutMs: 5 * 60_000 });
 }
 
+// ---------- 데이터 보기 (읽기 전용) ----------
+
+export interface ColumnInfo {
+  name: string;
+  type: string;
+  columnType: string;
+  key: string;
+  nullable: boolean;
+}
+
+const BINARY_TYPES = new Set(['binary', 'varbinary', 'tinyblob', 'blob', 'mediumblob', 'longblob']);
+const GEOMETRY_TYPES = new Set(['geometry', 'point', 'linestring', 'polygon', 'multipoint', 'multilinestring', 'multipolygon', 'geometrycollection']);
+/** 칸 하나에 보여 줄 최대 글자 수 (나머지는 … 로 자른다) */
+export const CELL_CHARS = 300;
+export const PAGE_SIZES = [25, 50, 100, 200];
+
+/** mariadb -N -B 출력 → 행/칸. 값 안의 탭·줄바꿈·역슬래시는 \t \n \\ 로 이스케이프되어 온다 */
+export function parseBatch(out: string): string[][] {
+  if (!out) return [];
+  const body = out.endsWith('\n') ? out.slice(0, -1) : out;
+  return body.split('\n').map((line) => line.split('\t').map((f) => f.replace(/\\(.)/g, (_, c: string) => (c === 'n' ? '\n' : c === 't' ? '\t' : c === '0' ? '\0' : c))));
+}
+
+/**
+ * 칸 하나를 문자열로 꺼내는 식. NULL 과 문자열 'NULL' 을 구분하려고 NULL 은 'n', 값은 'v' + 값으로 보낸다.
+ * 바이너리는 앞 32바이트 16진수, 긴 글은 CELL_CHARS 에서 자른다.
+ */
+export function cellExpr(c: ColumnInfo) {
+  const id = ident(c.name);
+  const str = `CONVERT(${id} USING utf8mb4)`;
+  const v = BINARY_TYPES.has(c.type)
+    ? `CONCAT('0x', HEX(LEFT(${id}, 32)), IF(LENGTH(${id}) > 32, '…', ''))`
+    : c.type === 'bit'
+      ? `CONCAT('b''', BIN(${id}), '''')`
+      : GEOMETRY_TYPES.has(c.type)
+        ? `LEFT(ST_AsText(${id}), ${CELL_CHARS})`
+        : `IF(CHAR_LENGTH(${str}) > ${CELL_CHARS}, CONCAT(LEFT(${str}, ${CELL_CHARS}), '…'), ${str})`;
+  return `IF(${id} IS NULL, 'n', CONCAT('v', ${v}))`;
+}
+
+export interface BrowseOpts {
+  page: number;
+  size: number;
+  order?: string;
+  dir?: 'asc' | 'desc';
+  filterCol?: string;
+  filter?: string;
+}
+
+/** 이름은 모두 information_schema 에서 확인한 것만 쓰고, 검색어는 LIKE 리터럴로만 들어간다 */
+export function browseSql(schema: string, table: string, cols: ColumnInfo[], o: BrowseOpts) {
+  const names = new Set(cols.map((c) => c.name));
+  const size = PAGE_SIZES.includes(o.size) ? o.size : 50;
+  const page = Math.max(0, Math.min(Math.floor(o.page) || 0, 10_000_000));
+  let where = '';
+  if (o.filter && o.filterCol) {
+    if (!names.has(o.filterCol)) throw new HttpError(400, '없는 컬럼입니다');
+    const like = '%' + o.filter.replace(/[\\%_]/g, (m) => '\\' + m) + '%';
+    where = ` WHERE CONVERT(${ident(o.filterCol)} USING utf8mb4) LIKE ${lit(like)}`;
+  }
+  let order = '';
+  if (o.order) {
+    if (!names.has(o.order)) throw new HttpError(400, '없는 컬럼입니다');
+    order = ` ORDER BY ${ident(o.order)} ${o.dir === 'desc' ? 'DESC' : 'ASC'}`;
+  } else {
+    // 기본 키 순서로 고정해야 페이지를 넘겨도 줄이 섞이지 않는다
+    const pk = cols.filter((c) => c.key === 'PRI');
+    if (pk.length) order = ` ORDER BY ${pk.map((c) => ident(c.name)).join(', ')}`;
+  }
+  const from = `${ident(schema)}.${ident(table)}`;
+  return {
+    size,
+    page,
+    rows: `SET NAMES utf8mb4; SELECT ${cols.map(cellExpr).join(', ')} FROM ${from}${where}${order} LIMIT ${size + 1} OFFSET ${page * size};`,
+    count: `SET NAMES utf8mb4; SELECT COUNT(*) FROM ${from}${where};`,
+  };
+}
+
+async function assertSchema(db: Db, schema: string) {
+  if (!(await listDatabases(db)).some((d) => d.name === schema)) throw new HttpError(404, `DB ${schema} 가 없습니다`);
+}
+
+export async function listTables(db: Db, schema: string) {
+  await assertSchema(db, schema);
+  const out = await sql(
+    db,
+    `SELECT table_name, table_type, COALESCE(table_rows, 0), COALESCE(data_length + index_length, 0) FROM information_schema.tables WHERE table_schema = ${lit(schema)} ORDER BY table_name`,
+  );
+  return parseBatch(out).map(([name, type, est, size]) => ({ name: name!, view: type === 'VIEW', rows: Number(est), size: Number(size) }));
+}
+
+export async function tableColumns(db: Db, schema: string, table: string): Promise<ColumnInfo[]> {
+  const out = await sql(
+    db,
+    `SELECT column_name, data_type, column_type, column_key, is_nullable FROM information_schema.columns WHERE table_schema = ${lit(schema)} AND table_name = ${lit(table)} ORDER BY ordinal_position`,
+  );
+  const cols = parseBatch(out).map(([name, type, columnType, key, nullable]) => ({ name: name!, type: (type ?? '').toLowerCase(), columnType: columnType ?? '', key: key ?? '', nullable: nullable === 'YES' }));
+  if (!cols.length) throw new HttpError(404, `테이블 ${table} 이 없습니다`);
+  return cols;
+}
+
+export async function browseRows(db: Db, schema: string, table: string, o: BrowseOpts) {
+  await assertSchema(db, schema);
+  const cols = await tableColumns(db, schema, table);
+  const q = browseSql(schema, table, cols, o);
+  const raw = parseBatch(await sql(db, q.rows, { timeoutMs: 30_000 }));
+  const rows = raw.slice(0, q.size).map((r) => r.map((cell) => (cell.startsWith('v') ? cell.slice(1) : null)));
+  // 행 수: 크지 않으면 정확히 세고, 크면 information_schema 의 추정치
+  let total: number | null = null;
+  let exact = false;
+  const est = Number(parseBatch(await sql(db, `SELECT COALESCE(table_rows, 0) FROM information_schema.tables WHERE table_schema = ${lit(schema)} AND table_name = ${lit(table)}`))[0]?.[0] ?? 0);
+  if (est < 200_000) {
+    total = Number(parseBatch(await sql(db, q.count, { timeoutMs: 30_000 }))[0]?.[0] ?? 0);
+    exact = true;
+  } else if (!o.filter) total = est;
+  return { columns: cols, rows, page: q.page, size: q.size, hasMore: raw.length > q.size, total, exact };
+}
+
 /** 계정과 권한을 CREATE USER / GRANT 문으로 (mariadb-dump --system=users 는 서버 collation 에 따라 실패해서 직접 만든다) */
 async function usersSql(db: Db) {
   const users = (await rows(db, 'SELECT user, host, is_role FROM mysql.user')).filter(

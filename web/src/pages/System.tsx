@@ -6,7 +6,7 @@ import type { Me } from '../components/Layout';
 import { Badge, Button, Card, CopyField, KV, Loading, Meter, Notice, PageHeader, Segmented, Tabs, cx, toast, useAction, useConfirm } from '../components/ui';
 import { api } from '../lib/api';
 import { bytes, duration, pct, rate } from '../lib/format';
-import { setQuery, useLocation, useTitle } from '../lib/router';
+import { Link, setQuery, useLocation, useTitle } from '../lib/router';
 import { useApi, useLive } from '../lib/store';
 import { BackupsPanel } from './Backups';
 
@@ -191,7 +191,7 @@ function StatusTab({ info }: { info: Info | undefined }) {
       </Card>
 
       <NetworkServices info={info} />
-      <PanelUpdate version={info?.panelVersion} node={info?.panelNode} />
+      <PanelVersion version={info?.panelVersion} node={info?.panelNode} />
     </div>
   );
 }
@@ -539,77 +539,17 @@ function JournalCard() {
   );
 }
 
-function PanelUpdate({ version, node }: { version?: string; node?: string }) {
-  const [check, setCheck] = useState<{ available: boolean; local?: string; remote?: string; branch?: string; commits?: { sha: string; message: string; when: string }[]; error?: string } | null>(null);
-  const [log, setLog] = useState<string | null>(null);
-  const { busy, run } = useAction();
-  const confirm = useConfirm();
-  useEffect(() => {
-    if (log === null) return;
-    const t = setInterval(async () => {
-      try {
-        setLog((await api.get<{ log: string }>('/api/system/update/log')).log);
-      } catch {
-        /* 패널 재시작 중 */
-      }
-    }, 2000);
-    return () => clearInterval(t);
-  }, [log === null]);
+function PanelVersion({ version, node }: { version?: string; node?: string }) {
+  const { data } = useApi<{ settings: { enabled: boolean; intervalHours: number }; current: { sha: string } }>('/api/system/update/status');
   return (
-    <Card
-      title={<span className="flex items-center gap-2"><RefreshCw size={16} /> HROne 업데이트</span>}
-      actions={
-        <span className="text-xs text-muted">
-          v{version} · Node {node}
+    <Card title={<span className="flex items-center gap-2"><RefreshCw size={16} /> HROne</span>} actions={<span className="text-xs text-muted">v{version} · {data?.current.sha} · Node {node}</span>}>
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+        <span className="text-fg-2">
+          자동 업데이트 {data ? (data.settings.enabled ? `켜짐 (${data.settings.intervalHours === 24 ? '하루' : `${data.settings.intervalHours}시간`}마다 확인)` : '꺼짐') : ''} · 업데이트해도 앱과 DB 는 계속 실행됩니다
         </span>
-      }
-    >
-      <div className="space-y-3 text-sm">
-        <p className="text-muted">패널만 업데이트되고 앱과 DB 는 계속 돌아갑니다 (각자 별도 systemd 서비스). 터미널에서는 sudo hrone update.</p>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            icon={<RefreshCw size={15} />}
-            loading={busy === 'c'}
-            onClick={() =>
-              run('c', async () => {
-                const r = await api.get<typeof check>('/api/system/update/check');
-                setCheck(r);
-                if (r && !r.available && !r.error) toast.ok('최신 버전입니다');
-              })
-            }
-          >
-            업데이트 확인
-          </Button>
-          {check?.available && (
-            <Button
-              variant="primary"
-              icon={<Download size={15} />}
-              loading={busy === 'u'}
-              onClick={async () => {
-                if (!(await confirm({ title: 'HROne 업데이트', body: '최신 코드를 받아 빌드하고 패널을 재시작합니다 (1~3분). 그동안 패널 화면은 잠깐 끊깁니다.', confirm: '업데이트' }))) return;
-                run('u', async () => {
-                  await api.post('/api/system/update');
-                  setLog('');
-                });
-              }}
-            >
-              지금 업데이트 ({check.commits?.length}개)
-            </Button>
-          )}
-        </div>
-        {check?.error && <div className="text-bad">{check.error}</div>}
-        {check?.commits && check.commits.length > 0 && (
-          <div className="space-y-1 rounded-xl border border-line bg-surface-2 p-3">
-            {check.commits.map((c) => (
-              <div key={c.sha} className="flex gap-2 text-[13px]">
-                <span className="mono text-accent-2">{c.sha}</span>
-                <span className="min-w-0 flex-1 truncate">{c.message}</span>
-                <span className="text-xs text-muted">{c.when}</span>
-              </div>
-            ))}
-          </div>
-        )}
-        {log !== null && <pre className="mono max-h-72 overflow-auto rounded-xl border border-line bg-code p-3 text-[12px] text-fg-2">{log || '시작하는 중...'}</pre>}
+        <Link to="/settings?tab=update" className="text-accent-2 hover:underline">
+          업데이트 설정
+        </Link>
       </div>
     </Card>
   );

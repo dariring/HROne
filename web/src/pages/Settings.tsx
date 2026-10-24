@@ -2,6 +2,7 @@ import QRCode from 'qrcode';
 import { Bell, GitBranch, KeyRound, Monitor, Save, Shield, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { ReauthDialog } from '../components/Dialogs';
+import { PanelUpdate } from '../components/PanelUpdate';
 import type { Me } from '../components/Layout';
 import { Badge, Button, Card, CopyField, Field, IconButton, Modal, Notice, PageHeader, Segmented, Tabs, Toggle, toast, useAction } from '../components/ui';
 import { api, errorText } from '../lib/api';
@@ -35,7 +36,7 @@ function Section({ icon, title, children, actions }: { icon: ReactNode; title: s
   );
 }
 
-type SettingsTab = 'account' | 'connect' | 'access' | 'audit';
+type SettingsTab = 'account' | 'connect' | 'access' | 'update' | 'audit';
 
 export function Settings({ me }: { me: Me }) {
   useTitle('설정');
@@ -52,6 +53,7 @@ export function Settings({ me }: { me: Me }) {
           { value: 'account', label: '내 계정' },
           { value: 'connect', label: 'GitHub · 알림' },
           { value: 'access', label: '패널 접속' },
+          { value: 'update', label: '업데이트' },
           { value: 'audit', label: '활동 기록' },
         ]}
       />
@@ -68,6 +70,7 @@ export function Settings({ me }: { me: Me }) {
         </div>
       )}
       {tab === 'access' && data && <PanelAccess s={data} reload={reload} />}
+      {tab === 'update' && <PanelUpdate />}
       {tab === 'audit' && <AuditPanel />}
     </div>
   );

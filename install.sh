@@ -144,9 +144,13 @@ BANNER
   cd "$HRONE_DIR"
   export npm_config_update_notifier=false npm_config_fund=false npm_config_audit=false
   npm ci --include=dev --loglevel=error
-  npm run build --silent
+  # 다른 폴더에 다 빌드한 뒤 바꿔치기 (빌드가 실패해도 지금 화면은 그대로 남는다)
+  rm -rf web/dist.new
+  npm run build --silent -- --outDir dist.new
+  [ -f web/dist.new/index.html ] || die "웹 UI 빌드 결과가 없습니다"
+  rm -rf web/dist
+  mv web/dist.new web/dist
   npm prune --omit=dev --loglevel=error
-  [ -f web/dist/index.html ] || die "웹 UI 빌드 결과가 없습니다"
 
   # ---------- 6. systemd ----------
   step "systemd 서비스 등록"

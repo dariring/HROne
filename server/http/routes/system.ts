@@ -8,6 +8,7 @@ import { NO_LIMITS, settings } from '../../lib/settings.ts';
 import type { Limits, PanelSettings } from '../../lib/types.ts';
 import { clampInt, HttpError } from '../../lib/util.ts';
 import { getApp, listApps, normalizeResources } from '../../services/apps.ts';
+import * as autoupdate from '../../services/autoupdate.ts';
 import * as backups from '../../services/backups.ts';
 import { getDb, listDbs, dbLock } from '../../services/databases/index.ts';
 import { getJob, listJobs, startJob } from '../../services/jobs.ts';
@@ -150,9 +151,25 @@ export function registerSystem(server: FastifyInstance) {
 
   server.get('/api/system/update/check', async () => system.updateCheck());
   server.post('/api/system/update', async (req) => {
+    await autoupdate.startUpdate(actor(req).username);
     audit(actor(req), 'system.update');
-    await system.runUpdate();
     return { ok: true };
+  });
+  server.get('/api/system/update/status', async () => ({
+    version: system.panelVersion(),
+    current: await autoupdate.currentCommit(),
+    settings: autoupdate.autoUpdateSettings(),
+    state: autoupdate.autoUpdateState(),
+    busy: autoupdate.busyReason(),
+  }));
+  server.put('/api/system/update/settings', async (req) => {
+    const b = (req.body ?? {}) as Body;
+    const r = autoupdate.setAutoUpdateSettings({
+      enabled: typeof b.enabled === 'boolean' ? b.enabled : undefined,
+      intervalHours: b.intervalHours === undefined ? undefined : Number(b.intervalHours),
+    });
+    audit(actor(req), 'settings.update', '', ['autoUpdate']);
+    return r;
   });
   server.get('/api/system/update/log', async () => ({ log: await system.updateLog() }));
   server.post('/api/system/restart-panel', async (req) => {

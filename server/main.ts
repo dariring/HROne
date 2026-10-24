@@ -17,6 +17,7 @@ import { tryRun } from './lib/exec.ts';
 import { settings } from './lib/settings.ts';
 import { HttpError } from './lib/util.ts';
 import { ensureAppIdentity, listApps, setDesired, writeRuntime } from './services/apps.ts';
+import { autoUpdateOnBoot, autoUpdateTick } from './services/autoupdate.ts';
 import { scheduledTick } from './services/backups.ts';
 import { listDbs, writeRuntime as writeDbRuntime } from './services/databases/index.ts';
 import { recoverOnBoot, schedulerTick } from './services/deploy.ts';
@@ -122,6 +123,7 @@ async function reconcile() {
 }
 
 await reconcile();
+await autoUpdateOnBoot().catch((e) => log.warn(`auto-update: ${errMsg(e)}`));
 startMonitor();
 setInterval(() => {
   try {
@@ -132,6 +134,7 @@ setInterval(() => {
 }, 1000).unref();
 setInterval(() => void pollTick().catch((e) => log.warn(`poll: ${errMsg(e)}`)), 5000).unref();
 setInterval(() => void scheduledTick().catch((e) => log.warn(`backup: ${errMsg(e)}`)), 60_000).unref();
+setInterval(() => void autoUpdateTick().catch((e) => log.warn(`auto-update: ${errMsg(e)}`)), 60_000).unref();
 
 const port = settings.panel().port;
 const host = process.env.HRONE_HOST ?? '0.0.0.0';

@@ -79,3 +79,20 @@ test('redis 콘솔 인자 / 한글 복원', () => {
   assert.equal(unescapeUtf8('"\\xec\\x95\\x88\\xeb\\x85\\x95"'), '"안녕"');
   assert.equal(unescapeUtf8('\\xff'), '\\xff');
 });
+
+test('MariaDB 데이터 보기: 배치 출력 파싱과 SQL', async () => {
+  const { browseSql, parseBatch } = await import('../services/databases/mariadb.ts');
+  assert.deepEqual(parseBatch('va\\tb\tn\nv줄1\\n줄2\tv\\\\x\n'), [
+    ['va\tb', 'n'],
+    ['v줄1\n줄2', 'v\\x'],
+  ]);
+  assert.deepEqual(parseBatch(''), []);
+  const cols = [
+    { name: 'id', type: 'int', columnType: 'int(11)', key: 'PRI', nullable: false },
+    { name: 'na`me', type: 'varchar', columnType: 'varchar(20)', key: '', nullable: true },
+  ];
+  const q = browseSql('app', 'my t', cols, { page: 2, size: 25, filterCol: 'na`me', filter: "50%_'x" });
+  assert.match(q.rows, /FROM `app`\.`my t` WHERE CONVERT\(`na``me` USING utf8mb4\) LIKE '%50\\\\%\\\\_\\'x%' ORDER BY `id` LIMIT 26 OFFSET 50;$/);
+  assert.equal(browseSql('app', 't', cols, { page: 0, size: 999 }).size, 50);
+  assert.throws(() => browseSql('app', 't', cols, { page: 0, size: 25, order: 'nope' }), /없는 컬럼/);
+});

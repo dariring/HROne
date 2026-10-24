@@ -159,6 +159,26 @@ export function registerDatabases(server: FastifyInstance) {
     return dbs.maria.listDatabases(maria(slug));
   });
 
+  // ----- 데이터 보기 (읽기 전용) -----
+
+  server.get('/api/databases/:slug/schemas/:schema/tables', async (req) => {
+    const { slug, schema } = req.params as { slug: string; schema: string };
+    return dbs.maria.listTables(maria(slug), schema);
+  });
+
+  server.get('/api/databases/:slug/schemas/:schema/tables/:table/rows', async (req) => {
+    const { slug, schema, table } = req.params as { slug: string; schema: string; table: string };
+    const qs = (req.query ?? {}) as Body;
+    return dbs.maria.browseRows(maria(slug), schema, table, {
+      page: Number(qs.page ?? 0),
+      size: Number(qs.size ?? 50),
+      order: qs.order ? String(qs.order) : undefined,
+      dir: qs.dir === 'desc' ? 'desc' : 'asc',
+      filterCol: qs.fcol ? String(qs.fcol) : undefined,
+      filter: qs.q ? String(qs.q).slice(0, 500) : undefined,
+    });
+  });
+
   server.post('/api/databases/:slug/schemas', async (req) => {
     const { slug } = req.params as { slug: string };
     const b = (req.body ?? {}) as Body;
