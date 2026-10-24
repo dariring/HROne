@@ -36,6 +36,7 @@ const LABEL: Record<string, string> = {
   'app.secrets': '앱 비밀값 변경',
   'app.deploykey': '배포 키 재생성',
   'app.restore': '앱 데이터 복원',
+  'app.file_download': '파일 내려받기',
   'deploy.manual': '수동 배포',
   'deploy.initial': '첫 배포',
   'deploy.rollback': '롤백',

@@ -422,7 +422,7 @@ function QueryConsole({ db }: { db: DbDetailData }) {
         </div>
       </Card>
       {err && <div className="mono whitespace-pre-wrap rounded-xl border border-bad/30 bg-bad/10 p-3 text-[12.5px] text-bad">{err}</div>}
-      {out && <pre className="mono max-h-[60vh] overflow-auto rounded-xl border border-line bg-[#07090d] p-4 text-[12.5px] leading-[1.5] text-fg-2">{out.output || '(출력 없음)'}</pre>}
+      {out && <pre className="mono max-h-[60vh] overflow-auto rounded-xl border border-line bg-code p-4 text-[12.5px] leading-[1.5] text-fg-2">{out.output || '(출력 없음)'}</pre>}
     </div>
   );
 }

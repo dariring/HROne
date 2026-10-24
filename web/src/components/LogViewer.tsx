@@ -140,7 +140,7 @@ export function LogViewer({ kind, slug, height = 'calc(100vh - 300px)' }: { kind
             const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
             if (atBottom !== follow) setFollow(atBottom);
           }}
-          className={cx('mono overflow-auto bg-[#07090d] py-2 text-[12.5px] leading-[1.6]', wrap ? 'whitespace-pre-wrap break-all' : 'whitespace-pre')}
+          className={cx('mono overflow-auto bg-code py-2 text-[12.5px] leading-[1.6]', wrap ? 'whitespace-pre-wrap break-all' : 'whitespace-pre')}
           style={{ height, minHeight: 280 }}
         >
           {!loaded ? (
@@ -194,7 +194,7 @@ export function DeployLog({ id, running, height = 420 }: { id: number; running: 
         const el = e.currentTarget;
         setFollow(el.scrollHeight - el.scrollTop - el.clientHeight < 40);
       }}
-      className="mono overflow-auto rounded-xl border border-line bg-[#07090d] p-3 text-[12.5px] leading-[1.6] whitespace-pre-wrap break-all"
+      className="mono overflow-auto rounded-xl border border-line bg-code p-3 text-[12.5px] leading-[1.6] whitespace-pre-wrap break-all"
       style={{ height }}
     >
       {text.map((l, i) => {

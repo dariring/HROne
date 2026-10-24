@@ -63,11 +63,12 @@ export function BackupList({ list, me, reload, showTarget }: { list: Backup[]; m
                   {b.status === 'failed' && b.note && <div className="mt-1 max-w-xs truncate text-xs text-bad" title={b.note}>{b.note}</div>}
                 </td>
                 <td className="px-5 py-2.5">
-                  <div className="flex justify-end gap-0.5">
+                  <div className="flex items-center justify-end gap-0.5">
                     {b.status === 'done' && (
                       <>
-                        <a href={`/api/backups/${b.id}/download`} title="내려받기" className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-surface-3 hover:text-fg">
-                          <Download size={15} />
+                        <a href={`/api/backups/${b.id}/download`} className="mr-1 inline-flex h-8 items-center gap-1.5 rounded-[9px] bg-fill px-2.5 text-[13px] font-medium text-fg hover:bg-fill-strong/50">
+                          <Download size={14} />
+                          내려받기
                         </a>
                         <IconButton title="복원" onClick={() => setRestore(b)}>
                           <RotateCcw size={15} />

@@ -609,7 +609,7 @@ function PanelUpdate({ version, node }: { version?: string; node?: string }) {
             ))}
           </div>
         )}
-        {log !== null && <pre className="mono max-h-72 overflow-auto rounded-xl border border-line bg-[#07090d] p-3 text-[12px] text-fg-2">{log || '시작하는 중...'}</pre>}
+        {log !== null && <pre className="mono max-h-72 overflow-auto rounded-xl border border-line bg-code p-3 text-[12px] text-fg-2">{log || '시작하는 중...'}</pre>}
       </div>
     </Card>
   );

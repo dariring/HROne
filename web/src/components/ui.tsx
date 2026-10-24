@@ -22,7 +22,7 @@ type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'warn'
 
 const VARIANTS: Record<Variant, string> = {
   primary: 'bg-accent text-white hover:bg-accent-2 border-transparent',
-  secondary: 'bg-surface-3 text-fg hover:bg-line-2 border-line-2',
+  secondary: 'bg-fill text-fg hover:bg-fill-strong/50 border-transparent',
   ghost: 'bg-transparent text-fg-2 hover:bg-surface-3 hover:text-fg border-transparent',
   danger: 'bg-bad/15 text-bad hover:bg-bad/25 border-bad/30',
   success: 'bg-ok/15 text-ok hover:bg-ok/25 border-ok/30',
@@ -173,7 +173,7 @@ export function Toggle({ checked, onChange, disabled, label, sub }: { checked: b
         aria-checked={checked}
         disabled={disabled}
         onClick={() => onChange(!checked)}
-        className={cx('relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors cursor-pointer', checked ? 'bg-accent' : 'bg-line-2')}
+        className={cx('relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors cursor-pointer', checked ? 'bg-ok' : 'bg-fill-strong/60')}
       >
         <span className={cx('absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all', checked ? 'left-[18px]' : 'left-0.5')} />
       </button>
@@ -189,7 +189,7 @@ export function Toggle({ checked, onChange, disabled, label, sub }: { checked: b
 
 export function Segmented<T extends string>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: { value: T; label: ReactNode }[] }) {
   return (
-    <div className="inline-flex rounded-[10px] border border-line-2 bg-bg p-0.5">
+    <div className="inline-flex rounded-[9px] bg-fill p-0.5">
       {options.map((o) => (
         <button
           key={o.value}
@@ -197,7 +197,7 @@ export function Segmented<T extends string>({ value, onChange, options }: { valu
           onClick={() => onChange(o.value)}
           className={cx(
             'rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors cursor-pointer',
-            value === o.value ? 'bg-surface-3 text-fg shadow-sm' : 'text-muted hover:text-fg',
+            value === o.value ? 'bg-fill-strong text-fg shadow-sm' : 'text-fg-2 hover:text-fg',
           )}
         >
           {o.label}
@@ -209,14 +209,14 @@ export function Segmented<T extends string>({ value, onChange, options }: { valu
 
 export function Tabs<T extends string>({ value, onChange, tabs }: { value: T; onChange: (v: T) => void; tabs: { value: T; label: ReactNode; badge?: ReactNode }[] }) {
   return (
-    <div className="mb-5 flex gap-1 overflow-x-auto border-b border-line">
+    <div className="mb-5 flex gap-0.5 overflow-x-auto border-b border-line [scrollbar-width:none] sm:gap-1">
       {tabs.map((t) => (
         <button
           key={t.value}
           type="button"
           onClick={() => onChange(t.value)}
           className={cx(
-            'flex shrink-0 items-center gap-1.5 border-b-2 px-3.5 py-2.5 text-sm font-medium transition-colors cursor-pointer',
+            'flex shrink-0 items-center gap-1.5 border-b-2 px-2.5 py-2.5 text-sm font-medium transition-colors cursor-pointer sm:px-3.5',
             value === t.value ? 'tab-active' : 'border-transparent text-muted hover:text-fg',
           )}
         >
@@ -381,7 +381,7 @@ export function CopyField({ value, secret, mono = true, onReveal }: { value: str
   const [val, setVal] = useState(value);
   useEffect(() => setVal(value), [value]);
   return (
-    <div className="flex items-center gap-1 rounded-[9px] border border-line-2 bg-bg pl-3 pr-1">
+    <div className="flex items-center gap-1 rounded-[9px] bg-fill pl-3 pr-1">
       <div className={cx('min-w-0 flex-1 truncate py-2 text-[13px]', mono && 'mono')}>{shown ? val : '•'.repeat(Math.min(24, Math.max(8, val.length)))}</div>
       {secret && (
         <IconButton

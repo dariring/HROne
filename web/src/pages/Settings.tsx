@@ -299,7 +299,7 @@ function Account({ me }: { me: Me }) {
               onClick={() =>
                 run('otp', async () => {
                   const r = await api.post<{ secret: string; uri: string }>('/api/auth/totp/begin');
-                  const qr = await QRCode.toDataURL(r.uri, { margin: 1, width: 220, color: { dark: '#0a0c11', light: '#ffffff' } });
+                  const qr = await QRCode.toDataURL(r.uri, { margin: 1, width: 220, color: { dark: '#000000', light: '#ffffff' } });
                   setSetup({ ...r, qr });
                   setCode('');
                 })

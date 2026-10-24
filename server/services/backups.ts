@@ -125,6 +125,12 @@ export async function backupAppData(app: App, trigger: BackupRow['trigger'], ful
   }
 }
 
+/** 방금 만든 백업 파일의 내려받기 주소 (작업 결과로 UI 에 넘긴다) */
+export function downloadPathFor(file: string) {
+  const r = q.get<{ id: number }>('SELECT id FROM backups WHERE file = ?', file);
+  return r ? { download: `/api/backups/${r.id}/download`, name: path.basename(file) } : undefined;
+}
+
 export function restoreAppData(slug: string, backupId: number, actor: Actor) {
   const b = getBackup(backupId);
   if (b.kind !== 'app' || b.target_slug !== slug) throw new HttpError(400, '이 앱의 백업이 아닙니다');

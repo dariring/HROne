@@ -4,21 +4,27 @@
   --font-sans: -apple-system, BlinkMacSystemFont, 'Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', 'D2Coding', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  --color-bg: #0a0c11;
-  --color-surface: #11141b;
-  --color-surface-2: #161a23;
-  --color-surface-3: #1c212c;
-  --color-line: #232836;
-  --color-line-2: #2e3445;
-  --color-fg: #e7e9ef;
-  --color-fg-2: #b5bbc9;
-  --color-muted: #7e869a;
-  --color-accent: #7c5cff;
-  --color-accent-2: #9b83ff;
-  --color-ok: #34d399;
-  --color-warn: #fbbf24;
-  --color-bad: #f87171;
-  --color-info: #60a5fa;
+  /* 애플 다크 모드 시스템 색 (systemBackground / systemGray / systemBlue ...) */
+  --color-bg: #000000;
+  --color-surface: #1c1c1e;
+  --color-surface-2: #232325;
+  --color-surface-3: #2c2c2e;
+  --color-line: #303033;
+  --color-line-2: #3a3a3c;
+  --color-fg: #f5f5f7;
+  --color-fg-2: #c7c7cc;
+  --color-muted: #8e8e93;
+  --color-accent: #0a84ff;
+  --color-accent-2: #409cff;
+  --color-ok: #30d158;
+  --color-warn: #ff9f0a;
+  --color-bad: #ff453a;
+  --color-info: #64d2ff;
+  /* 입력칸·세그먼트 바탕 (tertiarySystemFill) 과 선택된 세그먼트 */
+  --color-fill: rgb(118 118 128 / 0.2);
+  --color-fill-strong: #636366;
+  /* 로그·콘솔 바탕 */
+  --color-code: #0b0b0c;
 }
 
 @layer base {
@@ -68,8 +74,8 @@
   }
   .input {
     width: 100%;
-    background: var(--color-bg);
-    border: 1px solid var(--color-line-2);
+    background: var(--color-fill);
+    border: 1px solid transparent;
     border-radius: 9px;
     padding: 0.5rem 0.75rem;
     font-size: 0.875rem;
@@ -78,7 +84,13 @@
   }
   .input:focus {
     border-color: var(--color-accent);
-    box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 25%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 30%, transparent);
+  }
+  .input::placeholder {
+    color: color-mix(in oklab, var(--color-muted) 75%, transparent);
+  }
+  select.input option {
+    background: var(--color-surface-3);
   }
   .input:disabled {
     opacity: 0.6;

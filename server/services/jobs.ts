@@ -13,6 +13,8 @@ export interface Job {
   status: 'running' | 'done' | 'failed';
   lines: string[];
   error: string | null;
+  /** 끝난 뒤 UI 에 줄 값 (예: { download: '/api/backups/3/download' }) */
+  result: Record<string, unknown> | null;
   startedAt: number;
   finishedAt: number | null;
 }
@@ -20,7 +22,7 @@ export interface Job {
 const jobs = new Map<number, Job>();
 let seq = 0;
 
-export function startJob(kind: string, target: string, title: string, fn: (log: (line: string) => void) => Promise<void>): Job {
+export function startJob(kind: string, target: string, title: string, fn: (log: (line: string) => void) => Promise<void | Record<string, unknown>>): Job {
   const job: Job = {
     id: ++seq,
     kind,
@@ -29,6 +31,7 @@ export function startJob(kind: string, target: string, title: string, fn: (log: 
     status: 'running',
     lines: [],
     error: null,
+    result: null,
     startedAt: Date.now(),
     finishedAt: null,
   };
@@ -40,7 +43,8 @@ export function startJob(kind: string, target: string, title: string, fn: (log: 
   };
   bus.publish('jobs', summary(job));
   fn(push)
-    .then(() => {
+    .then((r) => {
+      job.result = r ?? null;
       job.status = 'done';
     })
     .catch((e) => {
@@ -52,7 +56,7 @@ export function startJob(kind: string, target: string, title: string, fn: (log: 
     .finally(() => {
       job.finishedAt = Date.now();
       bus.publish('jobs', summary(job));
-      bus.publish(`job:${job.id}`, { done: true, status: job.status, error: job.error });
+      bus.publish(`job:${job.id}`, { done: true, status: job.status, error: job.error, result: job.result });
       // 완료된 작업은 1시간 뒤 정리
       setTimeout(() => jobs.delete(job.id), 3600_000).unref();
     });

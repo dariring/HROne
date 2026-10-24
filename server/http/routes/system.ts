@@ -22,6 +22,7 @@ import { actor, inCidr, reauth } from '../auth.ts';
 import { appSummary } from './apps.ts';
 import { dbSummary } from './databases.ts';
 import * as deploy from '../../services/deploy.ts';
+import { attachmentHeader } from '../../services/files.ts';
 
 type Body = Record<string, any>;
 
@@ -253,6 +254,7 @@ export function registerSystem(server: FastifyInstance) {
       const job = startJob('backup', slug, `${db.name} 백업`, async (log) => {
         const file = await dbLock.run(slug, () => backups.backupDatabase(getDb(slug), 'manual', String(b.note ?? '')));
         log(`완료: ${path.basename(file)}`);
+        return backups.downloadPathFor(file);
       });
       audit(actor(req), 'backup.create', slug);
       return { jobId: job.id };
@@ -262,6 +264,7 @@ export function registerSystem(server: FastifyInstance) {
       const job = startJob('backup', slug, `${app.name} 데이터 백업`, async (log) => {
         const file = await backups.backupAppData(getApp(slug), 'manual', !!b.full);
         log(`완료: ${path.basename(file)}`);
+        return backups.downloadPathFor(file);
       });
       audit(actor(req), 'backup.create', slug);
       return { jobId: job.id };
@@ -287,7 +290,8 @@ export function registerSystem(server: FastifyInstance) {
     const bk = backups.getBackup(Number((req.params as { id: string }).id));
     if (!bk.file.startsWith(PATHS.backups + path.sep) || !fs.existsSync(bk.file)) throw new HttpError(404, '파일이 없습니다');
     audit(actor(req), 'backup.download', bk.target_slug, { id: bk.id });
-    reply.header('content-disposition', `attachment; filename="${path.basename(bk.file)}"`);
+    reply.header('content-disposition', attachmentHeader(path.basename(bk.file)));
+    reply.header('content-length', fs.statSync(bk.file).size);
     reply.header('content-type', 'application/gzip');
     return reply.send(fs.createReadStream(bk.file));
   });

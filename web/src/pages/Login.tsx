@@ -31,7 +31,7 @@ export function Login({ onLogin }: { onLogin: () => void }) {
 
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_top,rgba(124,92,255,0.14),transparent_60%)]" />
+      
       <form onSubmit={submit} className="card relative w-full max-w-sm space-y-5 p-7 shadow-2xl">
         <div className="flex flex-col items-center gap-3 pb-1 text-center">
           <img src="/favicon.svg" className="h-12 w-12" alt="" />

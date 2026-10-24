@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, XCircle } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { api, errorText } from '../lib/api';
 import { useChannel } from '../lib/store';
@@ -213,6 +213,8 @@ interface Job {
   status: 'running' | 'done' | 'failed';
   lines: string[];
   error: string | null;
+  /** 백업 작업이면 { download, name } */
+  result?: { download?: string; name?: string } | null;
 }
 
 /** 오래 걸리는 작업 진행 상황 */
@@ -226,11 +228,11 @@ export function JobDialog({ jobId, onClose, onDone }: { jobId: number | null; on
     setJob(null);
     api.get<Job>(`/api/jobs/${jobId}`).then(setJob).catch(() => {});
   }, [jobId]);
-  useChannel(jobId ? `job:${jobId}` : null, (d: { line?: string; done?: boolean; status?: Job['status']; error?: string }) => {
+  useChannel(jobId ? `job:${jobId}` : null, (d: { line?: string; done?: boolean; status?: Job['status']; error?: string; result?: Job['result'] }) => {
     setJob((j) => {
       if (!j) return j;
       if (d.line !== undefined) return { ...j, lines: [...j.lines, d.line] };
-      if (d.done) return { ...j, status: d.status!, error: d.error ?? null };
+      if (d.done) return { ...j, status: d.status!, error: d.error ?? null, result: d.result ?? null };
       return j;
     });
   });
@@ -253,9 +255,19 @@ export function JobDialog({ jobId, onClose, onDone }: { jobId: number | null; on
         </span>
       }
       width={640}
-      footer={<Button onClick={onClose}>{running ? '백그라운드에서 계속' : '닫기'}</Button>}
+      footer={
+        <>
+          {job?.status === 'done' && job.result?.download && (
+            <a href={job.result.download} className="inline-flex h-9 items-center gap-1.5 rounded-[9px] bg-accent px-3.5 text-sm font-medium text-white hover:bg-accent-2">
+              <Download size={15} />
+              백업 파일 내려받기
+            </a>
+          )}
+          <Button onClick={onClose}>{running ? '백그라운드에서 계속' : '닫기'}</Button>
+        </>
+      }
     >
-      <div ref={box} className="mono h-72 overflow-auto rounded-xl border border-line bg-[#07090d] p-3 text-[12px] leading-relaxed whitespace-pre-wrap break-all text-fg-2">
+      <div ref={box} className="mono h-72 overflow-auto rounded-xl border border-line bg-code p-3 text-[12px] leading-relaxed whitespace-pre-wrap break-all text-fg-2">
         {(job?.lines ?? []).map((l, i) => (
           <div key={i} className={cx(l.startsWith('오류') && 'text-bad', (l === '완료' || l.endsWith('완료')) && 'text-ok')}>
             {l}

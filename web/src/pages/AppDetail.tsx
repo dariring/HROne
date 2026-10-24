@@ -17,6 +17,7 @@ import {
 import { useEffect, useState } from 'react';
 import { AreaChart } from '../components/Charts';
 import { EnvEditor } from '../components/EnvEditor';
+import { FileBrowser } from '../components/FileBrowser';
 import { DeployLog, LogViewer } from '../components/LogViewer';
 import { AppPower, DeployBadge, PendingDeploy, TRIGGER, modeText, type Deploy } from '../components/shared';
 import {
@@ -97,7 +98,7 @@ export interface AppDetailData extends AppSummary {
   lastSeenSha: string | null;
 }
 
-type Tab = 'overview' | 'console' | 'deploys' | 'env' | 'settings';
+type Tab = 'overview' | 'console' | 'files' | 'deploys' | 'env' | 'settings';
 
 // 예전 탭 주소(?tab=links 등)로 들어와도 맞는 곳을 보여 준다
 const OLD_TABS: Record<string, Tab> = { links: 'env', backups: 'settings', danger: 'settings' };
@@ -116,7 +117,12 @@ export function AppDetail({ slug, me }: { slug: string; me: Me }) {
   if (!app) return null;
 
   const state = app.deployedSha ? st?.state : 'not-deployed';
-  const setTab = (t: Tab) => setQuery('tab', t === 'overview' ? null : t);
+  const setTab = (t: Tab) => {
+    // 파일 탭의 위치(?dir, ?file)는 다른 탭으로 넘어가면 지운다
+    setQuery('dir', null);
+    setQuery('file', null);
+    setQuery('tab', t === 'overview' ? null : t);
+  };
 
   return (
     <div>
@@ -157,6 +163,7 @@ export function AppDetail({ slug, me }: { slug: string; me: Me }) {
         tabs={[
           { value: 'overview', label: '개요' },
           { value: 'console', label: '로그' },
+          { value: 'files', label: '파일' },
           { value: 'deploys', label: '배포', badge: app.openDeploy?.status === 'pending' ? <span className="h-1.5 w-1.5 rounded-full bg-warn" /> : undefined },
           { value: 'env', label: '환경변수', badge: app.envCount + app.links.length ? <span className="text-xs text-muted">{app.envCount + app.links.length}</span> : undefined },
           { value: 'settings', label: '설정' },
@@ -165,6 +172,7 @@ export function AppDetail({ slug, me }: { slug: string; me: Me }) {
 
       {tab === 'overview' && <Overview app={app} st={st} reload={reload} />}
       {tab === 'console' && <LogViewer kind="app" slug={slug} />}
+      {tab === 'files' && <FileBrowser slug={slug} />}
       {tab === 'deploys' && <Deploys app={app} />}
       {tab === 'env' && (
         <div className="space-y-5">
@@ -534,7 +542,7 @@ function DiffModal({ deploy, onClose }: { deploy: Deploy | null; onClose: () => 
               </button>
             ))}
           </div>
-          <div className="mono max-h-[60vh] min-h-[200px] overflow-auto rounded-xl border border-line bg-[#07090d] p-3 text-[12px] leading-[1.55] whitespace-pre">
+          <div className="mono max-h-[60vh] min-h-[200px] overflow-auto rounded-xl border border-line bg-code p-3 text-[12px] leading-[1.55] whitespace-pre">
             {file === null ? (
               <span className="text-muted">왼쪽에서 파일을 고르세요</span>
             ) : loading ? (

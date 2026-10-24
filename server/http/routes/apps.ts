@@ -5,7 +5,7 @@ import { audit } from '../../lib/audit.ts';
 import { randomToken } from '../../lib/crypto.ts';
 import { getSetting, q, setSetting } from '../../lib/db.ts';
 import { run } from '../../lib/exec.ts';
-import { appDataDir, PATHS, UNIT } from '../../lib/paths.ts';
+import { appDataDir, appDir, PATHS, UNIT } from '../../lib/paths.ts';
 import { settings } from '../../lib/settings.ts';
 import type { App, AppConfig, EnvVar } from '../../lib/types.ts';
 import { HttpError, rmrf } from '../../lib/util.ts';
@@ -22,6 +22,7 @@ import { getStatus, unitHistoryOf } from '../../services/monitor.ts';
 import { notify } from '../../services/notify.ts';
 import type { Identity } from '../../services/users.ts';
 import { actor, reauth } from '../auth.ts';
+import { registerFileRoutes } from './files.ts';
 
 type Body = Record<string, any>;
 
@@ -319,6 +320,17 @@ export function registerApps(server: FastifyInstance) {
     apps.getAppRow(slug);
     clearLogs(UNIT.app(slug));
     return { ok: true };
+  });
+
+  // ----- 파일 (읽기 전용) -----
+
+  registerFileRoutes(server, '/api/apps/:slug/files', {
+    root: (req) => {
+      const { slug } = req.params as { slug: string };
+      apps.getAppRow(slug);
+      return appDir(slug);
+    },
+    onDownload: (req, rel) => audit(actor(req), 'app.file_download', (req.params as { slug: string }).slug, { path: rel }),
   });
 
   // ----- DB 연결 -----
