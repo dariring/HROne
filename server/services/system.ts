@@ -229,6 +229,9 @@ export async function setTimezone(tz: string) {
     fs.symlinkSync(zone, '/etc/localtime');
     fs.writeFileSync('/etc/timezone', tz + '\n');
   }
+  // Node 는 시작할 때 읽은 시간대를 계속 쓴다. TZ 를 바꾸면 그 자리에서 다시 읽으므로
+  // 예약 백업 시각 같은 패널의 "서버 시간" 이 재시작 없이 바로 새 시간대를 따른다
+  process.env.TZ = tz;
 }
 
 // ---------- 패널 업데이트 ----------
