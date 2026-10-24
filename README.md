@@ -44,11 +44,13 @@ curl -fsSL https://raw.githubusercontent.com/dariring/HROne/main/install.sh | su
      lxc.cgroup2.devices.allow: c 10:200 rwm
      lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file
      ```
-3. **로그인 후** 설정 → 내 계정에서 비밀번호를 바꾸고 OTP를 켭니다.
-4. (비공개 저장소라면) 설정 → GitHub에 토큰을 넣습니다. Fine-grained token은 `Contents: Read-only` 권한이면 됩니다.
-5. (선택) 설정 → 알림에 디스코드 웹후크를 넣습니다.
-6. **앱 추가**: 저장소 주소만 넣으면 런타임과 명령을 자동으로 찾아 줍니다.
-7. **cloudflared**: 터널의 Public Hostname 서비스를 `http://127.0.0.1:<앱 포트>` 로 지정합니다. Nginx는 필요 없습니다.
+   - Tailscale을 쓰지 않는다면 내 PC에서 `ssh -L 7700:127.0.0.1:7700 <계정>@<서버>` 로 터널을 연 뒤 `http://localhost:7700` 으로 접속해도 됩니다.
+3. **로그인**하면 홈 화면의 "시작하기" 목록이 남은 일을 순서대로 알려 줍니다.
+   - 설정 → 내 계정에서 비밀번호를 바꾸고 OTP를 켭니다.
+   - (비공개 저장소라면) 설정 → GitHub · 알림에 토큰을 넣습니다. Fine-grained token은 `Contents: Read-only` 권한이면 됩니다.
+   - (선택) 같은 곳에 디스코드 웹후크를 넣습니다.
+4. **앱 추가**: 저장소 주소만 넣고 "확인" → "배포하기". 런타임과 설치·시작 명령은 자동으로 찾고, 나머지 옵션은 "고급 설정"에 접혀 있습니다.
+5. **cloudflared**: 터널의 Public Hostname 서비스를 `http://127.0.0.1:<앱 포트>` 로 지정합니다(앱 개요의 "접속" 카드에 복사용 주소가 있습니다). Nginx는 필요 없습니다.
 
 ## 앱 작성 규칙
 
@@ -76,7 +78,7 @@ curl -fsSL https://raw.githubusercontent.com/dariring/HROne/main/install.sh | su
 
 ## GitHub 웹후크 (선택)
 
-폴링만으로도 동작하지만, 푸시를 바로 감지하려면 앱 설정 → GitHub 웹후크에 나오는 URL과 Secret을 저장소 Settings → Webhooks에 넣으세요. Content type은 `application/json` 입니다.
+폴링만으로도 동작하지만, 푸시를 바로 감지하려면 앱 → 설정 → GitHub 웹후크에 나오는 URL과 Secret을 저장소 Settings → Webhooks에 넣으세요. Content type은 `application/json` 입니다.
 패널을 공개하지 않았다면 cloudflared로 `/api/hooks/*` 경로만 공개해도 됩니다. 웹후크는 IP 제한과 상관없이 HMAC 서명으로만 확인합니다.
 
 ## 서버 명령

@@ -1,9 +1,8 @@
 import { Activity } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Badge, Button, Empty, Loading, PageHeader } from '../components/ui';
+import { Badge, Button, Empty, Loading } from '../components/ui';
 import { api } from '../lib/api';
 import { dateTime } from '../lib/format';
-import { useTitle } from '../lib/router';
 
 interface Row {
   id: number;
@@ -74,8 +73,8 @@ const LABEL: Record<string, string> = {
 
 const TONE = (a: string) => (/terminate|delete|drop|failed|bad_signature|kill/.test(a) ? 'red' : /restore|reveal|password|totp/.test(a) ? 'yellow' : /deploy|create/.test(a) ? 'purple' : 'gray');
 
-export function Audit() {
-  useTitle('활동 기록');
+/** 설정 → 활동 기록 탭 */
+export function AuditPanel() {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [more, setMore] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -93,8 +92,8 @@ export function Audit() {
     load();
   }, []);
   return (
-    <div>
-      <PageHeader title="활동 기록" sub="누가 언제 무엇을 했는지 (최근 2만 건)" />
+    <div className="space-y-4">
+      <p className="text-sm text-muted">누가 언제 무엇을 했는지 남습니다 (최근 2만 건).</p>
       {!rows ? (
         <Loading />
       ) : rows.length === 0 ? (

@@ -1,4 +1,4 @@
-import { Check, Copy, Eye, EyeOff, Loader2, X } from 'lucide-react';
+import { Check, ChevronDown, Copy, Eye, EyeOff, Loader2, X } from 'lucide-react';
 import {
   createContext,
   useCallback,
@@ -99,6 +99,57 @@ export function PageHeader({ title, sub, actions, icon }: { title: ReactNode; su
         </div>
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+    </div>
+  );
+}
+
+/** 접었다 펼 수 있는 카드. 닫혀 있을 때는 제목과 한 줄 요약만 보인다 */
+export function Fold({
+  icon,
+  title,
+  summary,
+  children,
+  defaultOpen = false,
+  danger,
+}: {
+  icon?: ReactNode;
+  title: ReactNode;
+  summary?: ReactNode;
+  children: ReactNode;
+  defaultOpen?: boolean;
+  danger?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section className={cx('card overflow-hidden', danger && 'border-bad/30')}>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center gap-3 px-5 py-3.5 text-left transition-colors hover:bg-surface-2/60 cursor-pointer"
+      >
+        {icon && <span className={cx('shrink-0', danger ? 'text-bad' : 'text-accent-2')}>{icon}</span>}
+        <span className="min-w-0 flex-1">
+          <span className={cx('block text-[15px] font-semibold', danger && 'text-bad')}>{title}</span>
+          {summary && !open && <span className="mt-0.5 block truncate text-xs text-muted">{summary}</span>}
+        </span>
+        <ChevronDown size={18} className={cx('shrink-0 text-muted transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && <div className="space-y-4 border-t border-line p-5">{children}</div>}
+    </section>
+  );
+}
+
+/** 폼 안에서 "고급 설정" 같은 부분을 접어 두는 버튼 */
+export function Disclosure({ label, children, defaultOpen = false }: { label: ReactNode; children: ReactNode; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div>
+      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="inline-flex items-center gap-1.5 text-sm font-medium text-fg-2 hover:text-fg cursor-pointer">
+        <ChevronDown size={16} className={cx('transition-transform', !open && '-rotate-90')} />
+        {label}
+      </button>
+      {open && <div className="mt-4 space-y-4">{children}</div>}
     </div>
   );
 }

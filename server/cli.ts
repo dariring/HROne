@@ -24,7 +24,9 @@ function addresses(port: number) {
       out.push(`http://${a.address}:${port}${tag}`);
     }
   }
-  out.push(`http://127.0.0.1:${port} (SSH 터널: ssh -L ${port}:127.0.0.1:${port} 서버)`);
+  // install.sh / hrone 은 sudo 로 돌기 때문에 SSH 로 들어온 계정은 SUDO_USER 에 있다
+  const who = process.env.SUDO_USER && process.env.SUDO_USER !== 'root' ? `${process.env.SUDO_USER}@` : '';
+  out.push(`http://127.0.0.1:${port} (내 PC 에서: ssh -L ${port}:127.0.0.1:${port} ${who}<서버 주소>  후 http://localhost:${port})`);
   return out;
 }
 

@@ -1,7 +1,6 @@
 import {
   AlertTriangle,
   ArrowLeft,
-  Download,
   ExternalLink,
   FileDiff,
   GitBranch,
@@ -14,11 +13,9 @@ import {
   Skull,
   Trash2,
   Undo2,
-  Upload,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { AreaChart } from '../components/Charts';
-import { DangerDialog, JobDialog } from '../components/Dialogs';
 import { EnvEditor } from '../components/EnvEditor';
 import { DeployLog, LogViewer } from '../components/LogViewer';
 import { AppPower, DeployBadge, PendingDeploy, TRIGGER, modeText, type Deploy } from '../components/shared';
@@ -26,6 +23,7 @@ import {
   Badge,
   Button,
   Card,
+  CopyField,
   Empty,
   ErrorBox,
   Field,
@@ -48,7 +46,6 @@ import { ago, bytes, dateTime, duration, pct, sha } from '../lib/format';
 import { Link, navigate, setQuery, useLocation, useTitle } from '../lib/router';
 import { useApi, useUnit, type UnitStatus } from '../lib/store';
 import { AppSettings } from './AppSettings';
-import { BackupList, type Backup } from './Backups';
 import { DbIcon, RuntimeIcon, type AppSummary, type DbSummary } from './Dashboard';
 
 export interface AppConfig {
@@ -100,11 +97,15 @@ export interface AppDetailData extends AppSummary {
   lastSeenSha: string | null;
 }
 
-type Tab = 'overview' | 'console' | 'deploys' | 'env' | 'links' | 'settings' | 'backups' | 'danger';
+type Tab = 'overview' | 'console' | 'deploys' | 'env' | 'settings';
+
+// 예전 탭 주소(?tab=links 등)로 들어와도 맞는 곳을 보여 준다
+const OLD_TABS: Record<string, Tab> = { links: 'env', backups: 'settings', danger: 'settings' };
 
 export function AppDetail({ slug, me }: { slug: string; me: Me }) {
   const { query } = useLocation();
-  const tab = (query.get('tab') as Tab) || 'overview';
+  const raw = query.get('tab') ?? 'overview';
+  const tab = (OLD_TABS[raw] ?? raw) as Tab;
   const { data: app, error, loading, reload } = useApi<AppDetailData>(`/api/apps/${slug}`, { refreshOn: ['apps', 'deploys'] });
   const unit = useUnit(`hrone-app-${slug}.service`);
   const st = unit ?? app?.status ?? null;
@@ -155,24 +156,23 @@ export function AppDetail({ slug, me }: { slug: string; me: Me }) {
         onChange={setTab}
         tabs={[
           { value: 'overview', label: '개요' },
-          { value: 'console', label: '콘솔' },
+          { value: 'console', label: '로그' },
           { value: 'deploys', label: '배포', badge: app.openDeploy?.status === 'pending' ? <span className="h-1.5 w-1.5 rounded-full bg-warn" /> : undefined },
-          { value: 'env', label: '환경변수', badge: app.envCount ? <span className="text-xs text-muted">{app.envCount}</span> : undefined },
-          { value: 'links', label: 'DB 연결', badge: app.links.length ? <span className="text-xs text-muted">{app.links.length}</span> : undefined },
+          { value: 'env', label: '환경변수', badge: app.envCount + app.links.length ? <span className="text-xs text-muted">{app.envCount + app.links.length}</span> : undefined },
           { value: 'settings', label: '설정' },
-          { value: 'backups', label: '백업' },
-          { value: 'danger', label: <span className="text-bad/80">위험 구역</span> },
         ]}
       />
 
       {tab === 'overview' && <Overview app={app} st={st} reload={reload} />}
       {tab === 'console' && <LogViewer kind="app" slug={slug} />}
       {tab === 'deploys' && <Deploys app={app} />}
-      {tab === 'env' && <EnvEditor slug={slug} running={st?.state === 'running'} />}
-      {tab === 'links' && <Links app={app} reload={reload} running={st?.state === 'running'} />}
-      {tab === 'settings' && <AppSettings app={app} reload={reload} />}
-      {tab === 'backups' && <AppBackups app={app} me={me} />}
-      {tab === 'danger' && <Danger app={app} me={me} />}
+      {tab === 'env' && (
+        <div className="space-y-5">
+          <EnvEditor slug={slug} running={st?.state === 'running'} />
+          <Links app={app} reload={reload} running={st?.state === 'running'} />
+        </div>
+      )}
+      {tab === 'settings' && <AppSettings app={app} me={me} reload={reload} />}
     </div>
   );
 }
@@ -196,7 +196,11 @@ function Overview({ app, st, reload }: { app: AppDetailData; st: UnitStatus | nu
     <div className="space-y-5">
       {!app.deployedSha && !app.busy && (
         <Notice tone="yellow" title="아직 배포되지 않았습니다" icon={<AlertTriangle size={16} />}>
-          첫 배포가 실패했다면 배포 탭에서 로그를 확인하고, 설정을 고친 뒤 다시 배포하세요.
+          첫 배포가 실패했다면{' '}
+          <button type="button" className="text-accent-2 underline cursor-pointer" onClick={() => setQuery('tab', 'deploys')}>
+            배포 기록
+          </button>
+          에서 로그를 확인하고, 설정을 고친 뒤 다시 배포하세요.
         </Notice>
       )}
       {app.openDeploy && (app.openDeploy.status === 'pending' || app.openDeploy.status === 'scheduled') && <OpenDeployCard id={app.openDeploy.id} name={app.name} />}
@@ -252,8 +256,8 @@ function Overview({ app, st, reload }: { app: AppDetailData; st: UnitStatus | nu
               items={[
                 ['현재 커밋', <span className="mono">{sha(app.deployedSha)}</span>],
                 ['배포 시각', app.deployedAt ? `${ago(app.deployedAt)} (${dateTime(app.deployedAt)})` : '-'],
-                ['적용 방식', modeText(app.deployMode, app.deployDelaySec)],
-                ['원격 확인', app.config.pollEnabled ? `${app.config.pollIntervalSec}초마다 · ${ago(app.lastPollAt)}` : '폴링 꺼짐 (웹후크만)'],
+                ['푸시하면', modeText(app.deployMode, app.deployDelaySec)],
+                ['새 커밋 확인', app.config.pollEnabled ? `${app.config.pollIntervalSec}초마다 · 마지막 ${ago(app.lastPollAt)}` : '꺼짐 (웹후크만)'],
                 ...(app.rejectedSha && app.lastSeenSha === app.rejectedSha
                   ? ([[ '건너뛴 커밋', <span className="mono text-warn">{sha(app.rejectedSha)} (거절/실패/롤백)</span> ]] as [string, React.ReactNode][])
                   : []),
@@ -288,8 +292,26 @@ function Overview({ app, st, reload }: { app: AppDetailData; st: UnitStatus | nu
                   })
                 }
               >
-                원격 확인
+                새 커밋 확인
               </Button>
+            </div>
+          </Card>
+          <Card title="접속">
+            <div className="space-y-3 text-sm">
+              {app.publicUrl ? (
+                <a href={app.publicUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-accent-2 hover:underline">
+                  <ExternalLink size={14} />
+                  {app.publicUrl.replace(/^https?:\/\//, '')}
+                </a>
+              ) : (
+                app.port && (
+                  <p className="text-muted">
+                    인터넷에 공개하려면 cloudflared 터널의 서비스 주소를 아래 주소로 지정하세요. 공개 주소는 설정 → 기본에 적어 두면 여기 링크로 나옵니다.
+                  </p>
+                )
+              )}
+              {app.port ? <CopyField value={`http://127.0.0.1:${app.port}`} /> : <p className="text-muted">포트 없이 실행되는 앱입니다 (봇 등).</p>}
+              {(st?.listen ?? []).length > 0 && <div className="text-xs text-muted">실제로 열린 주소: <span className="mono">{st!.listen.map((l) => `${l.addr}:${l.port}`).join(', ')}</span></div>}
             </div>
           </Card>
           <Card title="실행">
@@ -298,7 +320,6 @@ function Overview({ app, st, reload }: { app: AppDetailData; st: UnitStatus | nu
                 items={[
                   ['런타임', `${app.runtime === 'node' ? 'Node.js' : 'Python'} ${app.runtimeVersion}`],
                   ['시작 명령', <code className="text-[12.5px]">{app.config.startCmd || '-'}</code>],
-                  ['리스닝', (st?.listen ?? []).length ? <span className="mono text-[12.5px]">{st!.listen.map((l) => `${l.addr}:${l.port}`).join(', ')}</span> : <span className="text-muted">-</span>],
                   ['폴더', <span className="mono text-[12px] break-all">{app.dir}</span>],
                 ]}
               />
@@ -547,49 +568,47 @@ function Links({ app, reload, running }: { app: AppDetailData; reload: () => voi
     }
   };
   return (
-    <div className="space-y-5">
-      <Card title="연결된 데이터베이스" pad={false}>
-        {app.links.length === 0 ? (
-          <div className="px-5 py-8 text-center text-sm text-muted">연결된 DB 가 없습니다. 연결하면 접속 정보가 환경변수로 자동 주입됩니다.</div>
-        ) : (
-          <div className="divide-y divide-line">
-            {app.links.map((l) => (
-              <div key={l.slug} className="flex flex-wrap items-center gap-3 px-5 py-3.5">
-                <DbIcon type={l.type} size={32} />
-                <div className="min-w-0 flex-1">
-                  <Link to={`/databases/${l.slug}`} className="font-semibold hover:underline">
-                    {l.name}
-                  </Link>
-                  <div className="mono mt-0.5 text-xs text-muted">{l.keys.join(' · ')}</div>
-                </div>
-                {l.prefix && <Badge tone="purple">접두사 {l.prefix}</Badge>}
-                <IconButton
-                  title="연결 해제"
-                  onClick={() =>
-                    run(`rm${l.slug}`, async () => {
-                      const r = await api.del<{ restartNeeded: boolean }>(`/api/apps/${app.slug}/links/${l.slug}`);
-                      await afterChange(r.restartNeeded);
-                    }, '연결을 해제했습니다')
-                  }
-                >
-                  <Trash2 size={15} />
-                </IconButton>
+    <Card title="데이터베이스 연결" pad={false}>
+      {app.links.length === 0 ? (
+        <div className="px-5 pt-4 text-sm text-muted">MariaDB · Redis 를 연결하면 접속 정보(DATABASE_URL, REDIS_URL 등)가 환경변수로 자동으로 들어갑니다.</div>
+      ) : (
+        <div className="divide-y divide-line">
+          {app.links.map((l) => (
+            <div key={l.slug} className="flex flex-wrap items-center gap-3 px-5 py-3.5">
+              <DbIcon type={l.type} size={32} />
+              <div className="min-w-0 flex-1">
+                <Link to={`/databases/${l.slug}`} className="font-semibold hover:underline">
+                  {l.name}
+                </Link>
+                <div className="mono mt-0.5 text-xs text-muted">{l.keys.join(' · ')}</div>
               </div>
-            ))}
-          </div>
-        )}
-      </Card>
-      <Card title="DB 연결 추가">
+              {l.prefix && <Badge tone="purple">접두사 {l.prefix}</Badge>}
+              <IconButton
+                title="연결 해제"
+                onClick={() =>
+                  run(`rm${l.slug}`, async () => {
+                    const r = await api.del<{ restartNeeded: boolean }>(`/api/apps/${app.slug}/links/${l.slug}`);
+                    await afterChange(r.restartNeeded);
+                  }, '연결을 해제했습니다')
+                }
+              >
+                <Trash2 size={15} />
+              </IconButton>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className={cx('px-5 py-4', app.links.length > 0 && 'border-t border-line')}>
         {available.length === 0 ? (
           <div className="text-sm text-muted">
-            연결할 수 있는 DB 가 없습니다.{' '}
+            {app.links.length ? '더 연결할 DB 가 없습니다.' : '아직 DB 가 없습니다.'}{' '}
             <Link to="/databases?new=1" className="text-accent-2 hover:underline">
               새 DB 만들기
             </Link>
           </div>
         ) : (
           <div className="flex flex-wrap items-end gap-3">
-            <Field label="데이터베이스" className="min-w-[200px] flex-1">
+            <Field label="연결할 DB" className="min-w-[200px] flex-1">
               <select className="input" value={db} onChange={(e) => setDb(e.target.value)}>
                 <option value="">선택...</option>
                 {available.map((d) => (
@@ -620,110 +639,7 @@ function Links({ app, reload, running }: { app: AppDetailData; reload: () => voi
             </Button>
           </div>
         )}
-      </Card>
-    </div>
-  );
-}
-
-// ---------- 백업 ----------
-
-function AppBackups({ app, me }: { app: AppDetailData; me: Me }) {
-  const { data, reload } = useApi<Backup[]>(`/api/backups?kind=app&slug=${app.slug}`, { refreshOn: ['backups'] });
-  const [job, setJob] = useState<number | null>(null);
-  const { busy, run } = useAction();
-  return (
-    <div className="space-y-5">
-      <Notice tone="blue" title="앱 데이터 백업">
-        보존 경로({app.config.preservePaths.slice(0, 4).join(', ')}
-        {app.config.preservePaths.length > 4 ? ' 등' : ''})에 맞는 파일과 환경변수를 묶어 저장합니다. "전체" 는 node_modules 를 뺀 앱 폴더 전체입니다. 예약 백업은 설정 탭에서 켭니다.
-      </Notice>
-      <div className="flex flex-wrap gap-2">
-        <Button variant="primary" icon={<Upload size={15} />} loading={busy === 'data'} onClick={() => run('data', async () => setJob((await api.post<{ jobId: number }>('/api/backups', { kind: 'app', slug: app.slug })).jobId))}>
-          데이터 백업
-        </Button>
-        <Button icon={<Download size={15} />} loading={busy === 'full'} onClick={() => run('full', async () => setJob((await api.post<{ jobId: number }>('/api/backups', { kind: 'app', slug: app.slug, full: true })).jobId))}>
-          전체 폴더 백업
-        </Button>
       </div>
-      <BackupList list={data ?? []} me={me} reload={reload} />
-      <JobDialog jobId={job} onClose={() => setJob(null)} onDone={reload} />
-    </div>
-  );
-}
-
-// ---------- 위험 구역 ----------
-
-function Danger({ app, me }: { app: AppDetailData; me: Me }) {
-  const [open, setOpen] = useState(false);
-  const [backup, setBackup] = useState(true);
-  const [dropDbs, setDropDbs] = useState<string[]>([]);
-  const { busy, run } = useAction();
-  const confirm = useConfirm();
-  return (
-    <div className="space-y-5">
-      <Card title="의존성 새로 설치 후 재배포">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="max-w-xl text-sm text-muted">의존성 설치를 처음부터 다시 하고(Python 은 가상환경도 새로 만듦) 배포합니다. 패키지가 꼬였을 때 쓰세요.</p>
-          <Button
-            icon={<RotateCcw size={15} />}
-            loading={busy === 'clean'}
-            onClick={async () => {
-              if (!(await confirm({ title: '클린 재배포', body: '의존성을 새로 설치하고 현재 브랜치의 최신 커밋으로 배포합니다.', confirm: '재배포' }))) return;
-              run('clean', async () => {
-                const r = await api.post<{ id: number }>(`/api/apps/${app.slug}/deploy`, { clean: true });
-                navigate(`/apps/${app.slug}?tab=deploys&deploy=${r.id}`);
-              });
-            }}
-          >
-            클린 재배포
-          </Button>
-        </div>
-      </Card>
-      <div className="card border-bad/30">
-        <div className="flex flex-wrap items-center justify-between gap-4 p-5">
-          <div>
-            <div className="font-semibold text-bad">앱 삭제 (Terminate)</div>
-            <p className="mt-1 max-w-xl text-sm text-muted">프로세스를 멈추고 코드, 환경변수, 배포 기록, systemd 서비스, 전용 계정을 모두 지웁니다.</p>
-          </div>
-          <Button variant="danger" icon={<Trash2 size={15} />} onClick={() => setOpen(true)}>
-            앱 삭제
-          </Button>
-        </div>
-      </div>
-      <DangerDialog
-        open={open}
-        onClose={() => setOpen(false)}
-        title={`${app.name} 삭제`}
-        target={app.slug}
-        needTotp={me.totpEnabled}
-        items={[
-          <>
-            앱 폴더 <code className="text-xs">{app.dir}</code> (코드, 로컬 DB 파일, 업로드 등)
-          </>,
-          `환경변수 ${app.envCount}개, 배포 기록, 배포 키`,
-          `systemd 서비스 hrone-app-${app.slug} 와 계정 hr-${app.slug}`,
-          ...(dropDbs.length ? [`연결된 DB: ${dropDbs.join(', ')} (데이터 포함)`] : []),
-        ]}
-        options={
-          <>
-            <Toggle checked={backup} onChange={setBackup} label="삭제 전 최종 백업 만들기 (권장)" sub="앱 폴더 전체 + 환경변수를 백업 메뉴에 남깁니다" />
-            {app.links.map((l) => (
-              <Toggle
-                key={l.slug}
-                checked={dropDbs.includes(l.slug)}
-                onChange={(v) => setDropDbs(v ? [...dropDbs, l.slug] : dropDbs.filter((x) => x !== l.slug))}
-                label={`연결된 DB "${l.name}" 도 삭제`}
-                sub="다른 앱도 쓰고 있다면 끄세요"
-              />
-            ))}
-          </>
-        }
-        onConfirm={async (auth) => {
-          const r = await api.post<{ backupFile: string | null }>(`/api/apps/${app.slug}/terminate`, { ...auth, backup, databases: dropDbs });
-          toast.ok(`삭제했습니다${r.backupFile ? ' (최종 백업은 백업 메뉴에 있습니다)' : ''}`);
-          navigate('/apps');
-        }}
-      />
-    </div>
+    </Card>
   );
 }

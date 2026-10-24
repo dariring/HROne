@@ -1,4 +1,4 @@
-import { ArrowLeft, Eraser, KeyRound, Play, Plus, RotateCw, Save, Square, Terminal, Trash2, Unlock, Upload, UserPlus } from 'lucide-react';
+import { ArrowLeft, Eraser, KeyRound, Play, Plus, RotateCw, Save, SlidersHorizontal, Square, Terminal, Trash2, Unlock, Upload, UserPlus } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { DangerDialog, JobDialog } from '../components/Dialogs';
 import type { Me } from '../components/Layout';
@@ -8,8 +8,10 @@ import {
   Button,
   Card,
   CopyField,
+  Disclosure,
   ErrorBox,
   Field,
+  Fold,
   IconButton,
   KV,
   Loading,
@@ -64,11 +66,15 @@ interface DbDetailData extends DbSummary {
   dataDir: string;
 }
 
-type Tab = 'overview' | 'console' | 'query' | 'schemas' | 'limits' | 'backups' | 'settings' | 'danger';
+type Tab = 'overview' | 'query' | 'schemas' | 'backups' | 'console' | 'settings';
+
+// 예전 탭 주소로 들어와도 맞는 곳을 보여 준다
+const OLD_TABS: Record<string, Tab> = { limits: 'settings', danger: 'settings' };
 
 export function DbDetail({ slug, me }: { slug: string; me: Me }) {
   const { query } = useLocation();
-  const tab = (query.get('tab') as Tab) || 'overview';
+  const raw = query.get('tab') ?? 'overview';
+  const tab = (OLD_TABS[raw] ?? raw) as Tab;
   const { data: db, error, loading, reload } = useApi<DbDetailData>(`/api/databases/${slug}`, { refreshOn: ['databases', 'jobs'] });
   const unit = useUnit(`hrone-db-${slug}.service`);
   const st = unit ?? db?.status ?? null;
@@ -147,13 +153,11 @@ export function DbDetail({ slug, me }: { slug: string; me: Me }) {
         onChange={(t) => setQuery('tab', t === 'overview' ? null : t)}
         tabs={[
           { value: 'overview', label: '개요' },
-          { value: 'console', label: '로그' },
           { value: 'query', label: maria ? 'SQL 콘솔' : 'Redis 콘솔' },
           ...(maria ? [{ value: 'schemas' as Tab, label: 'DB · 계정' }] : []),
-          { value: 'limits', label: '연결 제한' },
           { value: 'backups', label: '백업' },
+          { value: 'console', label: '로그' },
           { value: 'settings', label: '설정' },
-          { value: 'danger', label: <span className="text-bad/80">위험 구역</span> },
         ]}
       />
 
@@ -161,10 +165,18 @@ export function DbDetail({ slug, me }: { slug: string; me: Me }) {
       {tab === 'console' && <LogViewer kind="db" slug={slug} />}
       {tab === 'query' && <QueryConsole db={db} />}
       {tab === 'schemas' && maria && <Schemas db={db} me={me} />}
-      {tab === 'limits' && <Limits db={db} reload={reload} running={st?.state === 'running'} />}
       {tab === 'backups' && <DbBackups db={db} me={me} reload={reload} />}
-      {tab === 'settings' && <DbSettings db={db} reload={reload} />}
-      {tab === 'danger' && <Danger db={db} me={me} />}
+      {tab === 'settings' && (
+        <div className="space-y-3">
+          <DbSettings db={db} reload={reload} />
+          <Fold icon={<Unlock size={16} />} title="연결 제한" summary={limitSummary(db)}>
+            <Limits db={db} reload={reload} running={st?.state === 'running'} />
+          </Fold>
+          <Fold icon={<Trash2 size={16} />} title="삭제" summary="DB 와 데이터를 지웁니다" danger>
+            <Danger db={db} me={me} />
+          </Fold>
+        </div>
+      )}
       <JobDialog jobId={job} onClose={() => setJob(null)} onDone={reload} />
     </div>
   );
@@ -191,37 +203,6 @@ function Overview({ db, running, reload }: { db: DbDetailData; running: boolean;
   return (
     <div className="grid gap-5 lg:grid-cols-[1fr_380px]">
       <div className="space-y-5">
-        {s?.error && <ErrorBox error={s.error} />}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="card p-4">
-            <div className="text-xs text-muted">연결</div>
-            <div className="mt-1.5 text-xl font-bold">{conn ? `${conn.cur} / ${conn.max}` : '-'}</div>
-            {conn && <div className="mt-2"><Meter value={(conn.cur / Math.max(1, conn.max)) * 100} /></div>}
-            {conn?.peak !== null && conn && <div className="mt-1 text-xs text-muted">최대 사용 {conn.peak}</div>}
-          </div>
-          <div className="card p-4">
-            <div className="text-xs text-muted">메모리</div>
-            <div className="mt-1.5 text-xl font-bold">{maria ? bytes(Number(s?.innodb_buffer_pool_size ?? 0), 0) : bytes(s?.usedMemory)}</div>
-            <div className="mt-0.5 text-xs text-muted">{maria ? '버퍼 풀' : s?.maxMemory ? `상한 ${bytes(s.maxMemory)}` : '상한 없음'}</div>
-          </div>
-          <div className="card p-4">
-            <div className="text-xs text-muted">가동 시간</div>
-            <div className="mt-1.5 text-xl font-bold">{s ? duration(maria ? Number(s.Uptime) : s.uptime) : '-'}</div>
-            <div className="mt-0.5 text-xs text-muted">버전 {maria ? String(s?.version ?? '').split('-')[0] : s?.version}</div>
-          </div>
-          <div className="card p-4">
-            <div className="text-xs text-muted">{maria ? '쿼리' : '초당 명령'}</div>
-            <div className="mt-1.5 text-xl font-bold">{s ? (maria ? Number(s.Questions).toLocaleString() : s.opsPerSec) : '-'}</div>
-            <div className="mt-0.5 text-xs text-muted">{maria ? `느린 쿼리 ${s?.Slow_queries ?? '-'}` : `키 ${s ? Object.values(s.keyspace as Record<string, number>).reduce((a, b) => a + b, 0) : '-'}`}</div>
-          </div>
-        </div>
-        {maria && s && Number(s.Connection_errors_max_connections) > 0 && (
-          <Notice tone="yellow" title={`연결 수 초과로 거부된 접속이 ${s.Connection_errors_max_connections}번 있었습니다`}>
-            "연결 제한" 탭에서 max_connections 를 올리거나 "제한 해제" 를 누르세요.
-          </Notice>
-        )}
-        {!maria && s && s.rejectedConnections > 0 && <Notice tone="yellow" title={`거부된 연결 ${s.rejectedConnections}회`}>maxclients 를 올리세요 ("연결 제한" 탭).</Notice>}
-
         <Card title="접속 정보" actions={<Button size="sm" variant="ghost" onClick={reveal}>비밀번호 보기</Button>}>
           <div className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
@@ -267,15 +248,46 @@ function Overview({ db, running, reload }: { db: DbDetailData; running: boolean;
             {db.bind !== 'local' && <Notice tone="yellow">모든 인터페이스에서 접속을 받고 있습니다. Tailscale IP 로 PC 의 DB 툴에서 접속할 수 있습니다.</Notice>}
           </div>
         </Card>
+        {s?.error && <ErrorBox error={s.error} />}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="card p-4">
+            <div className="text-xs text-muted">연결</div>
+            <div className="mt-1.5 text-xl font-bold">{conn ? `${conn.cur} / ${conn.max}` : '-'}</div>
+            {conn && <div className="mt-2"><Meter value={(conn.cur / Math.max(1, conn.max)) * 100} /></div>}
+            {conn?.peak !== null && conn && <div className="mt-1 text-xs text-muted">최대 사용 {conn.peak}</div>}
+          </div>
+          <div className="card p-4">
+            <div className="text-xs text-muted">메모리</div>
+            <div className="mt-1.5 text-xl font-bold">{maria ? bytes(Number(s?.innodb_buffer_pool_size ?? 0), 0) : bytes(s?.usedMemory)}</div>
+            <div className="mt-0.5 text-xs text-muted">{maria ? '버퍼 풀' : s?.maxMemory ? `상한 ${bytes(s.maxMemory)}` : '상한 없음'}</div>
+          </div>
+          <div className="card p-4">
+            <div className="text-xs text-muted">가동 시간</div>
+            <div className="mt-1.5 text-xl font-bold">{s ? duration(maria ? Number(s.Uptime) : s.uptime) : '-'}</div>
+            <div className="mt-0.5 text-xs text-muted">버전 {maria ? String(s?.version ?? '').split('-')[0] : s?.version}</div>
+          </div>
+          <div className="card p-4">
+            <div className="text-xs text-muted">{maria ? '쿼리' : '초당 명령'}</div>
+            <div className="mt-1.5 text-xl font-bold">{s ? (maria ? Number(s.Questions).toLocaleString() : s.opsPerSec) : '-'}</div>
+            <div className="mt-0.5 text-xs text-muted">{maria ? `느린 쿼리 ${s?.Slow_queries ?? '-'}` : `키 ${s ? Object.values(s.keyspace as Record<string, number>).reduce((a, b) => a + b, 0) : '-'}`}</div>
+          </div>
+        </div>
+        {maria && s && Number(s.Connection_errors_max_connections) > 0 && (
+          <Notice tone="yellow" title={`연결 수 초과로 거부된 접속이 ${s.Connection_errors_max_connections}번 있었습니다`}>
+            설정 → 연결 제한에서 "제한 해제" 를 누르거나 max_connections 를 올리세요.
+          </Notice>
+        )}
+        {!maria && s && s.rejectedConnections > 0 && <Notice tone="yellow" title={`거부된 연결 ${s.rejectedConnections}회`}>설정 → 연결 제한에서 maxclients 를 올리세요.</Notice>}
+
       </div>
       <div className="space-y-5">
         <Card title="연결된 앱">
           {db.linkedApps.length === 0 ? (
-            <div className="text-sm text-muted">없음 · 앱 상세 → DB 연결 탭에서 연결합니다</div>
+            <div className="text-sm text-muted">없음 · 앱 → 환경변수 탭에서 이 DB 를 연결하면 접속 정보가 자동으로 들어갑니다</div>
           ) : (
             <div className="space-y-2">
               {db.linkedApps.map((a) => (
-                <Link key={a.slug} to={`/apps/${a.slug}?tab=links`} className="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm hover:bg-surface-2">
+                <Link key={a.slug} to={`/apps/${a.slug}?tab=env`} className="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm hover:bg-surface-2">
                   {a.name}
                   {a.prefix && <Badge>{a.prefix}</Badge>}
                 </Link>
@@ -605,7 +617,7 @@ function Limits({ db, reload, running }: { db: DbDetailData; reload: () => void;
 
   return (
     <div className="space-y-5">
-      <div className="card flex flex-wrap items-center justify-between gap-4 border-accent/30 bg-accent/5 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-accent/30 bg-accent/5 p-4">
         <div>
           <div className="flex items-center gap-2 font-semibold">
             <Unlock size={16} className="text-accent-2" /> 연결 제한 한 번에 해제
@@ -642,7 +654,8 @@ function Limits({ db, reload, running }: { db: DbDetailData; reload: () => void;
         </Notice>
       )}
       {s && !s.error && (
-        <Card title="현재 상태">
+        <div>
+          <div className="mb-2 text-sm font-semibold">현재 상태</div>
           <div className="grid gap-4 text-sm sm:grid-cols-4">
             {maria ? (
               <>
@@ -684,10 +697,18 @@ function Limits({ db, reload, running }: { db: DbDetailData; reload: () => void;
               </>
             )}
           </div>
-        </Card>
+        </div>
       )}
 
-      <Card title="세부 설정" actions={maria && <Button size="sm" variant="ghost" icon={<Eraser size={14} />} loading={busy === 'flush'} onClick={() => run('flush', () => api.post(`/api/databases/${db.slug}/flush-hosts`), '차단된 호스트를 풀었습니다 (FLUSH HOSTS)')}>차단 호스트 풀기</Button>}>
+      <div>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="text-sm font-semibold">세부 설정</div>
+          {maria && (
+            <Button size="sm" variant="ghost" icon={<Eraser size={14} />} loading={busy === 'flush'} onClick={() => run('flush', () => api.post(`/api/databases/${db.slug}/flush-hosts`), '차단된 호스트를 풀었습니다 (FLUSH HOSTS)')}>
+              차단 호스트 풀기
+            </Button>
+          )}
+        </div>
         {maria ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <NumField label="max_connections" hint="서버 전체 동시 연결" value={l.maxConnections} onChange={(v) => set('maxConnections', v)} />
@@ -739,7 +760,7 @@ function Limits({ db, reload, running }: { db: DbDetailData; reload: () => void;
             저장 + 바로 적용
           </Button>
         </div>
-      </Card>
+      </div>
     </div>
   );
 }
@@ -802,26 +823,24 @@ function DbSettings({ db, reload }: { db: DbDetailData; reload: () => void }) {
   const confirm = useConfirm();
   const num = (v: string) => (v.trim() === '' ? null : Number(v));
   return (
-    <div className="space-y-5">
-      <Card title="기본">
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Field label="표시 이름">
-            <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
-          </Field>
-          <Field label="포트" hint="바꾸면 DB 를 재시작하고 연결된 앱 환경변수도 갱신합니다">
-            <input className="input mono" inputMode="numeric" value={port} onChange={(e) => setPort(e.target.value.replace(/\D/g, ''))} />
-          </Field>
-          <Field label="접속 허용 주소">
-            <select className="input" value={bind === 'local' || bind === 'all' ? bind : 'custom'} onChange={(e) => setBind(e.target.value === 'custom' ? '' : e.target.value)}>
-              <option value="local">이 서버만 (127.0.0.1)</option>
-              <option value="all">모든 인터페이스 (0.0.0.0)</option>
-              <option value="custom">특정 IP (예: Tailscale IP)</option>
-            </select>
-            {bind !== 'local' && bind !== 'all' && <input className="input mono mt-2" placeholder="100.x.y.z" value={bind} onChange={(e) => setBind(e.target.value)} />}
-          </Field>
-        </div>
-      </Card>
-      <Card title="리소스 제한" >
+    <Fold icon={<SlidersHorizontal size={16} />} title="기본" defaultOpen>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Field label="표시 이름">
+          <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+        <Field label="포트" hint="바꾸면 DB 를 재시작하고 연결된 앱 환경변수도 갱신합니다">
+          <input className="input mono" inputMode="numeric" value={port} onChange={(e) => setPort(e.target.value.replace(/\D/g, ''))} />
+        </Field>
+        <Field label="접속 허용 주소">
+          <select className="input" value={bind === 'local' || bind === 'all' ? bind : 'custom'} onChange={(e) => setBind(e.target.value === 'custom' ? '' : e.target.value)}>
+            <option value="local">이 서버만 (127.0.0.1)</option>
+            <option value="all">모든 인터페이스 (0.0.0.0)</option>
+            <option value="custom">특정 IP (예: Tailscale IP)</option>
+          </select>
+          {bind !== 'local' && bind !== 'all' && <input className="input mono mt-2" placeholder="100.x.y.z" value={bind} onChange={(e) => setBind(e.target.value)} />}
+        </Field>
+      </div>
+      <Disclosure label={<>리소스 제한 <span className="font-normal text-muted">{res.cpu || res.memoryMB ? [res.cpu ? `CPU ${res.cpu}코어` : '', res.memoryMB ? `메모리 ${res.memoryMB}MB` : ''].filter(Boolean).join(' · ') : '제한 없음'}</span></>}>
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="CPU (코어)">
             <input className="input mono" value={res.cpu ?? ''} onChange={(e) => setRes({ ...res, cpu: num(e.target.value) })} placeholder="제한 없음" />
@@ -837,8 +856,8 @@ function DbSettings({ db, reload }: { db: DbDetailData; reload: () => void }) {
             </select>
           </Field>
         </div>
-      </Card>
-      <div className="flex justify-end">
+      </Disclosure>
+      <div className="flex justify-end border-t border-line pt-4">
         <Button
           variant="primary"
           icon={<Save size={15} />}
@@ -852,8 +871,13 @@ function DbSettings({ db, reload }: { db: DbDetailData; reload: () => void }) {
           저장
         </Button>
       </div>
-    </div>
+    </Fold>
   );
+}
+
+function limitSummary(db: DbDetailData) {
+  const l = db.config.limits;
+  return 'maxConnections' in l ? `최대 연결 ${l.maxConnections.toLocaleString()} · 계정당 ${l.maxUserConnections || '무제한'}` : `최대 클라이언트 ${l.maxClients.toLocaleString()} · 메모리 ${l.maxMemoryMB ? `${l.maxMemoryMB}MB` : '제한 없음'}`;
 }
 
 function Danger({ db, me }: { db: DbDetailData; me: Me }) {
@@ -862,10 +886,10 @@ function Danger({ db, me }: { db: DbDetailData; me: Me }) {
   const ref = useRef(backup);
   ref.current = backup;
   return (
-    <div className="card border-bad/30">
-      <div className="flex flex-wrap items-center justify-between gap-4 p-5">
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <div className="font-semibold text-bad">데이터베이스 삭제 (Terminate)</div>
+          <div className="font-medium text-bad">데이터베이스 삭제</div>
           <p className="mt-1 max-w-xl text-sm text-muted">인스턴스를 멈추고 데이터 폴더와 서비스를 지웁니다. 연결된 앱의 DB 환경변수도 빠집니다.</p>
         </div>
         <Button variant="danger" icon={<Trash2 size={15} />} onClick={() => setOpen(true)}>
@@ -885,7 +909,7 @@ function Danger({ db, me }: { db: DbDetailData; me: Me }) {
           `systemd 서비스 hrone-db-${db.slug}`,
           ...(db.linkedApps.length ? [`연결된 앱 ${db.linkedApps.map((a) => a.name).join(', ')} 의 DB 환경변수`] : []),
         ]}
-        options={<Toggle checked={backup} onChange={setBackup} label="삭제 전 최종 백업 만들기 (권장)" sub="백업 메뉴에 남습니다" />}
+        options={<Toggle checked={backup} onChange={setBackup} label="삭제 전 최종 백업 만들기 (권장)" sub="서버 → 백업에 남습니다" />}
         onConfirm={async (auth) => {
           await api.post(`/api/databases/${db.slug}/terminate`, { ...auth, backup: ref.current });
           toast.ok('삭제했습니다');

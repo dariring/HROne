@@ -3,12 +3,10 @@ import { createRoot } from 'react-dom/client';
 import { Layout, type Me } from './components/Layout';
 import { ConfirmHost, Loading, ToastHost } from './components/ui';
 import { api } from './lib/api';
-import { match, useLocation } from './lib/router';
+import { Redirect, match, useLocation } from './lib/router';
 import { AppDetail } from './pages/AppDetail';
 import { AppNew } from './pages/AppNew';
 import { Apps } from './pages/Apps';
-import { Audit } from './pages/Audit';
-import { Backups } from './pages/Backups';
 import { Dashboard } from './pages/Dashboard';
 import { Databases } from './pages/Databases';
 import { DbDetail } from './pages/DbDetail';
@@ -18,16 +16,17 @@ import { System } from './pages/System';
 import './styles.css';
 
 const ROUTES: [string, (p: Record<string, string>, me: Me) => React.ReactNode][] = [
-  ['/', () => <Dashboard />],
+  ['/', (_p, me) => <Dashboard me={me} />],
   ['/apps', () => <Apps />],
   ['/apps/new', () => <AppNew />],
   ['/apps/:slug', (p, me) => <AppDetail slug={p.slug!} me={me} />],
   ['/databases', () => <Databases />],
   ['/databases/:slug', (p, me) => <DbDetail slug={p.slug!} me={me} />],
-  ['/backups', (_p, me) => <Backups me={me} />],
-  ['/system', () => <System />],
+  ['/system', (_p, me) => <System me={me} />],
   ['/settings', (_p, me) => <Settings me={me} />],
-  ['/audit', () => <Audit />],
+  // 예전 메뉴 주소
+  ['/backups', () => <Redirect to="/system?tab=backups" />],
+  ['/audit', () => <Redirect to="/settings?tab=audit" />],
 ];
 
 function Router({ me }: { me: Me }) {

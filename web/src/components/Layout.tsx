@@ -1,19 +1,20 @@
-import { Activity, Archive, Boxes, Database, Gauge, LogOut, Menu, Server, Settings, ShieldCheck, X } from 'lucide-react';
+import { Boxes, Database, House, LogOut, Menu, Server, Settings, ShieldCheck, X } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { api } from '../lib/api';
-import { pct } from '../lib/format';
 import { Link, useLocation } from '../lib/router';
-import { useApi, useLive, useSocketUp } from '../lib/store';
+import { useApi, useSocketUp } from '../lib/store';
 import { cx } from './ui';
 
+// 자주 쓰는 메뉴만 위에 두고, 서버 관리는 아래로 뺀다.
+// 예전 메뉴(백업, 활동 기록)는 서버 / 설정 안의 탭이 됐다.
 const NAV = [
-  { to: '/', label: '대시보드', icon: Gauge, exact: true },
+  { to: '/', label: '홈', icon: House, exact: true },
   { to: '/apps', label: '앱', icon: Boxes },
   { to: '/databases', label: '데이터베이스', icon: Database },
-  { to: '/backups', label: '백업', icon: Archive },
-  { to: '/system', label: '시스템', icon: Server },
-  { to: '/settings', label: '설정', icon: Settings },
-  { to: '/audit', label: '활동 기록', icon: Activity },
+];
+const NAV_MANAGE = [
+  { to: '/system', label: '서버', icon: Server, also: ['/backups'] },
+  { to: '/settings', label: '설정', icon: Settings, also: ['/audit'] },
 ];
 
 export interface Me {
@@ -24,7 +25,6 @@ export interface Me {
 export function Layout({ me, children }: { me: Me; children: ReactNode }) {
   const { path } = useLocation();
   const [open, setOpen] = useState(false);
-  const live = useLive();
   const up = useSocketUp();
   const { data: open_ } = useApi<{ status: string }[]>('/api/deploys/open', { refreshOn: ['deploys'] });
   const pending = (open_ ?? []).filter((d) => d.status === 'pending').length;
@@ -32,27 +32,33 @@ export function Layout({ me, children }: { me: Me; children: ReactNode }) {
 
   useEffect(() => setOpen(false), [path]);
 
-  const sys = live.system;
+  const item = (n: { to: string; label: string; icon: typeof House; exact?: boolean; also?: string[] }) => {
+    const active = n.exact ? path === n.to : [n.to, ...(n.also ?? [])].some((p) => path === p || path.startsWith(p + '/'));
+    const Icon = n.icon;
+    return (
+      <Link
+        key={n.to}
+        to={n.to}
+        className={cx(
+          'flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-[15px] font-medium transition-colors',
+          active ? 'bg-surface-3 text-fg' : 'text-muted hover:bg-surface-2 hover:text-fg',
+        )}
+      >
+        <Icon size={18} className={active ? 'text-accent-2' : ''} />
+        {n.label}
+        {n.to === '/apps' && pending > 0 && (
+          <span className="ml-auto rounded-full bg-warn px-1.5 text-[11px] font-bold text-black" title="승인을 기다리는 배포">
+            {pending}
+          </span>
+        )}
+      </Link>
+    );
+  };
   const nav = (
     <nav className="flex flex-col gap-0.5">
-      {NAV.map((n) => {
-        const active = n.exact ? path === n.to : path === n.to || path.startsWith(n.to + '/');
-        const Icon = n.icon;
-        return (
-          <Link
-            key={n.to}
-            to={n.to}
-            className={cx(
-              'flex items-center gap-3 rounded-[10px] px-3 py-2 text-sm font-medium transition-colors',
-              active ? 'bg-surface-3 text-fg' : 'text-muted hover:bg-surface-2 hover:text-fg',
-            )}
-          >
-            <Icon size={17} className={active ? 'text-accent-2' : ''} />
-            {n.label}
-            {n.to === '/apps' && pending > 0 && <span className="ml-auto rounded-full bg-warn px-1.5 text-[11px] font-bold text-black">{pending}</span>}
-          </Link>
-        );
-      })}
+      {NAV.map(item)}
+      <div className="mx-3 mb-1 mt-5 text-[11px] font-semibold tracking-wide text-muted/70">관리</div>
+      {NAV_MANAGE.map(item)}
     </nav>
   );
 
@@ -67,25 +73,6 @@ export function Layout({ me, children }: { me: Me; children: ReactNode }) {
       </Link>
       {nav}
       <div className="mt-auto space-y-3">
-        {sys && (
-          <div className="space-y-2 rounded-xl border border-line bg-surface-2 p-3 text-xs">
-            {[
-              ['CPU', sys.cpu],
-              ['메모리', sys.mem],
-              ['디스크', sys.disk[0] ? (sys.disk[0].used / sys.disk[0].total) * 100 : 0],
-            ].map(([k, v]) => (
-              <div key={k as string}>
-                <div className="mb-1 flex justify-between text-muted">
-                  <span>{k}</span>
-                  <span className="text-fg-2">{pct(v as number)}</span>
-                </div>
-                <div className="h-1 overflow-hidden rounded-full bg-surface-3">
-                  <div className={cx('h-full rounded-full', (v as number) > 90 ? 'bg-bad' : (v as number) > 75 ? 'bg-warn' : 'bg-accent')} style={{ width: `${Math.min(100, v as number)}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
         <div className="flex items-center justify-between gap-2 px-1">
           <div className="flex min-w-0 items-center gap-2 text-sm">
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/20 text-xs font-bold text-accent-2">{me.username.slice(0, 1).toUpperCase()}</div>

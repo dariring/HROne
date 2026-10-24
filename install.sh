@@ -232,7 +232,7 @@ EOF
     local PW
     PW="$(printf '%s' "$CREDS" | awk '{print $3}')"
     printf '\n 관리자 계정:  \033[1madmin\033[0m / \033[1;33m%s\033[0m\n' "$PW"
-    printf ' (로그인 후 설정 → 계정에서 비밀번호를 바꾸고 OTP 를 켜세요)\n'
+    printf ' (로그인하면 홈 화면의 "시작하기" 목록이 다음 할 일을 알려 줍니다)\n'
   fi
   printf '\n 다음 단계:\n'
   if ! command -v tailscale >/dev/null 2>&1; then

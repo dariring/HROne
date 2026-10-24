@@ -18,7 +18,7 @@ export function Apps() {
     <div>
       <PageHeader
         title="앱"
-        sub="GitHub 저장소와 연결된 Node.js / Python 앱"
+        sub="GitHub 에 푸시하면 자동으로 배포되는 Node.js · Python 앱"
         actions={
           <Button variant="primary" icon={<Plus size={15} />} onClick={() => navigate('/apps/new')}>
             앱 추가
@@ -31,7 +31,7 @@ export function Apps() {
       ) : !data?.length ? (
         <div className="card">
           <Empty icon={<Boxes size={24} />} title="아직 앱이 없습니다" action={<Button variant="primary" icon={<Plus size={15} />} onClick={() => navigate('/apps/new')}>앱 추가</Button>}>
-            저장소 주소만 넣으면 런타임과 명령을 자동으로 찾아 줍니다. 푸시하면 설정한 방식(즉시 / N분 뒤 / 승인 후)으로 배포됩니다.
+            GitHub 저장소 주소만 넣으면 실행 방법을 알아서 찾고, 이후 푸시할 때마다 자동으로 배포합니다.
           </Empty>
         </div>
       ) : (
@@ -74,7 +74,7 @@ export function Apps() {
                       <div className="mt-0.5">{st?.state === 'running' ? `CPU ${pct(st.cpu, 1)} · ${bytes(st.memory)}` : '-'}</div>
                     </div>
                     <div>
-                      <div className="text-muted">적용 방식</div>
+                      <div className="text-muted">푸시하면</div>
                       <div className="mt-0.5">{modeText(a.deployMode, a.deployDelaySec)}</div>
                     </div>
                   </div>

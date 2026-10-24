@@ -3,11 +3,12 @@ import { Bell, GitBranch, KeyRound, Monitor, Save, Shield, ShieldCheck, Trash2, 
 import { useEffect, useState, type ReactNode } from 'react';
 import { ReauthDialog } from '../components/Dialogs';
 import type { Me } from '../components/Layout';
-import { Badge, Button, Card, CopyField, Field, IconButton, Modal, Notice, PageHeader, Segmented, Toggle, toast, useAction } from '../components/ui';
+import { Badge, Button, Card, CopyField, Field, IconButton, Modal, Notice, PageHeader, Segmented, Tabs, Toggle, toast, useAction } from '../components/ui';
 import { api, errorText } from '../lib/api';
 import { ago } from '../lib/format';
-import { useTitle } from '../lib/router';
+import { setQuery, useLocation, useTitle } from '../lib/router';
 import { useApi } from '../lib/store';
+import { AuditPanel } from './Audit';
 
 interface SettingsData {
   panel: { port: number; access: 'private' | 'all' | 'custom'; allowedCidrs: string[]; baseUrl: string };
@@ -34,17 +35,40 @@ function Section({ icon, title, children, actions }: { icon: ReactNode; title: s
   );
 }
 
+type SettingsTab = 'account' | 'connect' | 'access' | 'audit';
+
 export function Settings({ me }: { me: Me }) {
   useTitle('설정');
+  const { query } = useLocation();
+  const tab = (query.get('tab') as SettingsTab) || 'account';
   const { data, reload } = useApi<SettingsData>('/api/settings');
   return (
-    <div className="mx-auto max-w-4xl space-y-5">
+    <div className="mx-auto max-w-4xl">
       <PageHeader title="설정" />
-      {data && <PanelAccess s={data} reload={reload} />}
-      {data && <GitHub s={data} reload={reload} />}
-      {data && <Notifications s={data} reload={reload} />}
-      <Account me={me} />
-      <UsersCard me={me} />
+      <Tabs
+        value={tab}
+        onChange={(t) => setQuery('tab', t === 'account' ? null : t)}
+        tabs={[
+          { value: 'account', label: '내 계정' },
+          { value: 'connect', label: 'GitHub · 알림' },
+          { value: 'access', label: '패널 접속' },
+          { value: 'audit', label: '활동 기록' },
+        ]}
+      />
+      {tab === 'account' && (
+        <div className="space-y-5">
+          <Account me={me} />
+          <UsersCard me={me} />
+        </div>
+      )}
+      {tab === 'connect' && data && (
+        <div className="space-y-5">
+          <GitHub s={data} reload={reload} />
+          <Notifications s={data} reload={reload} />
+        </div>
+      )}
+      {tab === 'access' && data && <PanelAccess s={data} reload={reload} />}
+      {tab === 'audit' && <AuditPanel />}
     </div>
   );
 }

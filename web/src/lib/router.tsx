@@ -62,6 +62,12 @@ export function Link({ to, onClick, ...rest }: AnchorHTMLAttributes<HTMLAnchorEl
   );
 }
 
+/** 예전 주소(/backups, /audit 등)를 새 위치로 보낸다 */
+export function Redirect({ to }: { to: string }) {
+  useEffect(() => navigate(to, { replace: true }), [to]);
+  return null;
+}
+
 export function useTitle(title: string) {
   useEffect(() => {
     document.title = title ? `${title} · HROne` : 'HROne';

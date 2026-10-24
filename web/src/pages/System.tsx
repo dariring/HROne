@@ -2,11 +2,13 @@ import { Cloud, Cpu, Download, Globe, HardDrive, Layers, Network, Package, Refre
 import { useEffect, useState } from 'react';
 import { AreaChart } from '../components/Charts';
 import { JobDialog } from '../components/Dialogs';
-import { Badge, Button, Card, CopyField, KV, Loading, Meter, Notice, PageHeader, Segmented, cx, toast, useAction, useConfirm } from '../components/ui';
+import type { Me } from '../components/Layout';
+import { Badge, Button, Card, CopyField, KV, Loading, Meter, Notice, PageHeader, Segmented, Tabs, cx, toast, useAction, useConfirm } from '../components/ui';
 import { api } from '../lib/api';
 import { bytes, duration, pct, rate } from '../lib/format';
-import { useTitle } from '../lib/router';
+import { setQuery, useLocation, useTitle } from '../lib/router';
 import { useApi, useLive } from '../lib/store';
+import { BackupsPanel } from './Backups';
 
 interface Info {
   hostname: string;
@@ -35,19 +37,56 @@ interface Res {
   cpuWeight: number | null;
 }
 
-export function System() {
-  useTitle('시스템');
+type SysTab = 'status' | 'backups' | 'advanced';
+
+export function System({ me }: { me: Me }) {
+  useTitle('서버');
+  const { query } = useLocation();
+  const tab = (query.get('tab') as SysTab) || 'status';
+  const { data: info } = useApi<Info>('/api/system/info');
+
+  return (
+    <div>
+      <PageHeader title="서버" sub={info ? `${info.hostname} · ${info.os} · ${info.arch} · ${info.virtualization === 'none' ? '물리/베어메탈' : info.virtualization.toUpperCase()}` : ''} icon={<Server size={20} />} />
+      <Tabs
+        value={tab}
+        onChange={(t) => setQuery('tab', t === 'status' ? null : t)}
+        tabs={[
+          { value: 'status', label: '상태' },
+          { value: 'backups', label: '백업' },
+          { value: 'advanced', label: '고급' },
+        ]}
+      />
+      {tab === 'status' && <StatusTab info={info ?? undefined} />}
+      {tab === 'backups' && <BackupsPanel me={me} />}
+      {tab === 'advanced' && (
+        <div className="space-y-6">
+          <p className="text-sm text-muted">처음에는 건드리지 않아도 됩니다. 서버를 직접 조정하고 싶을 때만 쓰세요.</p>
+          <SliceLimits info={info ?? undefined} />
+          <div className="grid gap-5 xl:grid-cols-2">
+            <Components />
+            <div className="space-y-5">
+              <Tuning container={!!info?.container} />
+              <Swap />
+              <Timezone current={info?.timezone} />
+              <JournalCard />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatusTab({ info }: { info: Info | undefined }) {
   const live = useLive();
   const sys = live.system;
-  const { data: info } = useApi<Info>('/api/system/info');
   const [range, setRange] = useState<'1h' | '24h'>('1h');
   const { data: metrics } = useApi<{ history: { t: number; cpu: number; mem: number; rx: number; tx: number; load: number }[] }>(`/api/system/metrics?range=${range}`, { interval: range === '1h' ? 10_000 : 60_000 });
   const h = metrics?.history ?? [];
 
   return (
     <div className="space-y-6">
-      <PageHeader title="시스템" sub={info ? `${info.hostname} · ${info.os} · ${info.arch} · ${info.virtualization === 'none' ? '물리/베어메탈' : info.virtualization.toUpperCase()}` : ''} icon={<Server size={20} />} />
-
       <div className="grid gap-5 lg:grid-cols-3">
         <Card title={<span className="flex items-center gap-2"><Cpu size={16} /> CPU</span>}>
           {sys ? (
@@ -151,17 +190,7 @@ export function System() {
         {range === '24h' && <div className="hint">24시간 기록은 패널이 켜진 뒤부터 1분 단위로 모읍니다 (패널 재시작 시 초기화).</div>}
       </Card>
 
-      <SliceLimits info={info ?? undefined} />
-      <NetworkServices info={info ?? undefined} />
-      <div className="grid gap-5 xl:grid-cols-2">
-        <Components />
-        <div className="space-y-5">
-          <Tuning container={!!info?.container} />
-          <Swap />
-          <Timezone current={info?.timezone} />
-          <JournalCard />
-        </div>
-      </div>
+      <NetworkServices info={info} />
       <PanelUpdate version={info?.panelVersion} node={info?.panelNode} />
     </div>
   );

@@ -2,10 +2,10 @@ import { Archive, Download, RotateCcw, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { JobDialog, ReauthDialog } from '../components/Dialogs';
 import type { Me } from '../components/Layout';
-import { Badge, Card, Empty, IconButton, Loading, PageHeader, Segmented, toast, useConfirm } from '../components/ui';
+import { Badge, Empty, IconButton, Loading, Segmented, toast, useConfirm } from '../components/ui';
 import { api } from '../lib/api';
 import { bytes, dateTime } from '../lib/format';
-import { Link, useTitle } from '../lib/router';
+import { Link } from '../lib/router';
 import { useApi } from '../lib/store';
 
 export interface Backup {
@@ -47,7 +47,7 @@ export function BackupList({ list, me, reload, showTarget }: { list: Backup[]; m
                 <td className="mono px-5 py-2.5 text-[13px]">{dateTime(b.created_at)}</td>
                 {showTarget && (
                   <td className="px-3 py-2.5">
-                    <Link to={b.kind === 'app' ? `/apps/${b.target_slug}?tab=backups` : `/databases/${b.target_slug}?tab=backups`} className="hover:underline">
+                    <Link to={b.kind === 'app' ? `/apps/${b.target_slug}?tab=settings` : `/databases/${b.target_slug}?tab=backups`} className="hover:underline">
                       {b.target_slug}
                     </Link>{' '}
                     <span className="text-xs text-muted">{b.kind === 'app' ? '앱' : 'DB'}</span>
@@ -120,34 +120,28 @@ export function BackupList({ list, me, reload, showTarget }: { list: Backup[]; m
   );
 }
 
-export function Backups({ me }: { me: Me }) {
-  useTitle('백업');
+/** 서버 → 백업 탭: 모든 앱/DB 의 백업 */
+export function BackupsPanel({ me }: { me: Me }) {
   const [kind, setKind] = useState<'all' | 'database' | 'app'>('all');
   const { data, loading, reload } = useApi<Backup[]>('/api/backups', { refreshOn: ['backups'] });
   const list = (data ?? []).filter((b) => kind === 'all' || b.kind === kind);
   const total = list.filter((b) => b.status === 'done').reduce((a, b) => a + b.size, 0);
   return (
-    <div>
-      <PageHeader
-        title="백업"
-        sub={`DB 덤프와 앱 데이터 백업 · ${bytes(total)} · /var/lib/hrone/backups`}
-        actions={
-          <Segmented
-            value={kind}
-            onChange={setKind}
-            options={[
-              { value: 'all', label: '전체' },
-              { value: 'database', label: 'DB' },
-              { value: 'app', label: '앱' },
-            ]}
-          />
-        }
-      />
-      <Card className="mb-5" pad>
-        <div className="text-sm leading-relaxed text-muted">
-          DB 는 기본으로 매일 04:00 에 자동 백업하고 7개를 보관합니다 (DB 상세 → 백업에서 변경). 앱 데이터(SQLite 등 보존 경로)는 앱 설정에서 예약 백업을 켤 수 있습니다. 백업 파일을 다른 곳에도 보관하려면 내려받거나 이 폴더를 외부로 동기화하세요.
-        </div>
-      </Card>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="max-w-2xl text-sm leading-relaxed text-muted">
+          DB 는 매일 04:00 에 자동으로 백업하고 7개를 보관합니다. 앱 데이터(SQLite 등)는 앱 설정 → 백업에서 켤 수 있습니다. 합계 {bytes(total)}
+        </p>
+        <Segmented
+          value={kind}
+          onChange={setKind}
+          options={[
+            { value: 'all', label: '전체' },
+            { value: 'database', label: 'DB' },
+            { value: 'app', label: '앱' },
+          ]}
+        />
+      </div>
       {loading && !data ? <Loading /> : <BackupList list={list} me={me} reload={reload} showTarget />}
     </div>
   );

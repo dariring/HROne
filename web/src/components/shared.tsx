@@ -142,7 +142,7 @@ export function AppPower({ slug, state, deployed, size = 'sm' }: { slug: string;
 }
 
 export function modeText(mode: 'auto' | 'delay' | 'manual', delay: number) {
-  return mode === 'auto' ? '즉시 자동' : mode === 'delay' ? `${delayText(delay)} 뒤 자동` : '검토 후 승인';
+  return mode === 'auto' ? '바로 배포' : mode === 'delay' ? `${delayText(delay)} 뒤 배포` : '승인 후 배포';
 }
 
 export function copyText(text: string, label = '복사했습니다') {
