@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { audit } from '../../lib/audit.ts';
+import { errMsg } from '../../lib/log.ts';
 import { randomToken } from '../../lib/crypto.ts';
 import { getSetting, q, setSetting } from '../../lib/db.ts';
 import { run } from '../../lib/exec.ts';
@@ -9,12 +10,15 @@ import { appDataDir, appDir, PATHS, UNIT } from '../../lib/paths.ts';
 import { settings } from '../../lib/settings.ts';
 import type { App, AppConfig, EnvVar } from '../../lib/types.ts';
 import { HttpError, rmrf } from '../../lib/util.ts';
+import * as appgit from '../../services/appgit.ts';
+import { checkApp } from '../../services/watcher.ts';
 import * as apps from '../../services/apps.ts';
 import { backupAppData } from '../../services/backups.ts';
 import { connectionEnv, linksForApp } from '../../services/databases/links.ts';
 import { getDb, getDbById, terminateDatabase } from '../../services/databases/index.ts';
 import { backupDatabase } from '../../services/backups.ts';
 import * as deploy from '../../services/deploy.ts';
+import { scopePatterns } from '../../services/deploy.ts';
 import { detect } from '../../services/detect.ts';
 import * as git from '../../services/git.ts';
 import * as journal from '../../services/journal.ts';
@@ -322,15 +326,64 @@ export function registerApps(server: FastifyInstance) {
     return { ok: true };
   });
 
-  // ----- 파일 (읽기 전용) -----
+  // ----- 파일 · git -----
+
+  const appOf = (req: FastifyRequest) => apps.getApp((req.params as { slug: string }).slug);
+  // 배포가 작업 폴더를 바꾸는 중에는 고치거나 커밋하지 않는다
+  const notDeploying = (app: App) => {
+    if (deploy.isAppBusy(app.id)) throw new HttpError(409, '배포가 진행 중입니다. 끝난 뒤에 다시 하세요.');
+  };
+  const repoOf = (app: App) => ({ dir: appDir(app.slug), branch: app.config.branch, url: app.config.repoUrl, ctx: { id: apps.appIdentity(app), auth: apps.gitAuthFor(app) } });
 
   registerFileRoutes(server, '/api/apps/:slug/files', {
-    root: (req) => {
-      const { slug } = req.params as { slug: string };
-      apps.getAppRow(slug);
-      return appDir(slug);
-    },
+    root: (req) => appDir(appOf(req).slug),
     onDownload: (req, rel) => audit(actor(req), 'app.file_download', (req.params as { slug: string }).slug, { path: rel }),
+    write: {
+      owner: (req) => apps.appIdentity(appOf(req)),
+      guard: (req) => notDeploying(appOf(req)),
+      onWrite: (req, rel, kind) => audit(actor(req), kind === 'edit' ? 'app.file_edit' : 'app.file_create', (req.params as { slug: string }).slug, { path: rel }),
+    },
+  });
+
+  server.get('/api/apps/:slug/git/status', async (req) => {
+    const app = appOf(req);
+    if (!fs.existsSync(path.join(appDir(app.slug), '.git'))) throw new HttpError(404, '아직 받아 온 저장소가 없습니다');
+    const st = await appgit.status(repoOf(app));
+    const preserve = scopePatterns(app.config.preservePaths, app.config.rootDir);
+    // 서버에 남길 파일(SQLite 등)은 커밋 창에서 기본으로 빼 둔다
+    const files = st.files.map((f) => ({ ...f, preserved: git.matchesAny(f.path, preserve) }));
+    return { ...st, files, auth: app.config.auth, localChanges: app.config.localChanges };
+  });
+
+  // 올린 커밋은 평소 푸시처럼 이 앱의 배포 방식(바로/잠시 뒤/승인 후)을 따른다
+  const afterPush = (app: App) => void checkApp(app).catch(() => {});
+
+  server.post('/api/apps/:slug/git/commit', async (req) => {
+    const app = appOf(req);
+    const b = (req.body ?? {}) as Body;
+    notDeploying(app);
+    const files = Array.isArray(b.files) ? b.files.map(String) : [];
+    const sha = await appgit.commit(repoOf(app), files, String(b.message ?? ''), actor(req).username);
+    audit(actor(req), 'app.git_commit', app.slug, { sha, files: files.slice(0, 20), message: String(b.message ?? '').slice(0, 200) });
+    if (!b.push) return { sha, pushed: false };
+    try {
+      await appgit.push(repoOf(app));
+    } catch (e) {
+      // 커밋은 이미 만들어졌으니 그 사실을 같이 알린다 (나중에 "올리기" 로 다시 시도)
+      throw new HttpError(e instanceof HttpError ? e.status : 500, `커밋 ${sha} 은 만들었지만 GitHub 에 올리지 못했습니다. ${errMsg(e)}`);
+    }
+    audit(actor(req), 'app.git_push', app.slug, { sha });
+    afterPush(app);
+    return { sha, pushed: true, deployMode: app.config.deployMode };
+  });
+
+  server.post('/api/apps/:slug/git/push', async (req) => {
+    const app = appOf(req);
+    notDeploying(app);
+    const sha = await appgit.push(repoOf(app));
+    audit(actor(req), 'app.git_push', app.slug, { sha: sha.slice(0, 7) });
+    afterPush(app);
+    return { pushed: true, deployMode: app.config.deployMode };
   });
 
   // ----- DB 연결 -----

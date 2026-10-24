@@ -172,7 +172,7 @@ export function AppDetail({ slug, me }: { slug: string; me: Me }) {
 
       {tab === 'overview' && <Overview app={app} st={st} reload={reload} />}
       {tab === 'console' && <LogViewer kind="app" slug={slug} />}
-      {tab === 'files' && <FileBrowser slug={slug} />}
+      {tab === 'files' && <FileBrowser slug={slug} canRestart={!!app.deployedSha} deployLabel={modeText(app.deployMode, app.deployDelaySec)} />}
       {tab === 'deploys' && <Deploys app={app} />}
       {tab === 'env' && (
         <div className="space-y-5">

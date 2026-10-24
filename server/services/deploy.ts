@@ -21,6 +21,7 @@ import {
   writeRuntime,
 } from './apps.ts';
 import { detect, manifestFiles, nodeInstallCmd, pythonInstallCmd } from './detect.ts';
+import { keepUnpushed } from './appgit.ts';
 import * as git from './git.ts';
 import * as journal from './journal.ts';
 import { notify } from './notify.ts';
@@ -448,8 +449,11 @@ async function pipeline(app: App, d: Deploy, log: Log, onTreeChange: () => void,
   log('');
   log('━━ 2/6 코드 반영 (로컬 데이터 보존)');
   const modified = head ? await git.locallyModified(root, ctx).catch(() => [] as string[]) : [];
+  // 패널에서 커밋했지만 GitHub 에 올리지 못한 커밋은 브랜치로 남기고, 그 파일도 백업에 넣는다
+  const unpushed = head ? await keepUnpushed(root, head, target, ctx, String(d.id)).catch(() => null) : null;
+  if (unpushed) log(`⚠ GitHub 에 올리지 않은 커밋이 있어 ${unpushed.ref} 브랜치에 보관했습니다. 코드는 GitHub 버전으로 바뀝니다.`);
   if (head !== target || modified.length) {
-    const plan = await planCheckout(app, root, head, target, modified, ctx, d.id);
+    const plan = await planCheckout(app, root, head, target, modified, ctx, d.id, unpushed?.files ?? []);
     if (plan.danger.length) {
       log(`로컬에서 바뀌었거나 저장소와 겹치는 파일 ${plan.danger.length}개를 백업: ${plan.backupDir}`);
     }
@@ -670,6 +674,8 @@ export async function planCheckout(
   modified: string[],
   ctx: Omit<git.GitCtx, 'cwd'>,
   deployId: number,
+  /** 올리지 못한 커밋이 바꾼 파일 (체크아웃으로 사라지거나 바뀌므로 백업한다) */
+  unpushedFiles: string[] = [],
 ): Promise<CheckoutPlan> {
   const onDisk = (f: string) => {
     try {
@@ -692,7 +698,8 @@ export async function planCheckout(
   }
   const mod = new Set(modified);
   const touched = new Set([...upstream, ...modified]);
-  const danger = [...touched].filter((f) => onDisk(f) && (collisions.has(f) || mod.has(f)));
+  const local = new Set(unpushedFiles);
+  const danger = [...new Set([...touched, ...local])].filter((f) => onDisk(f) && (collisions.has(f) || mod.has(f) || local.has(f)));
   const preserve = scopePatterns(app.config.preservePaths, app.config.rootDir);
   const keepLocal = danger.filter((f) => git.matchesAny(f, preserve) || (mod.has(f) && app.config.localChanges === 'keep'));
   const backupDir = path.join(PATHS.backups, 'apps', app.slug, 'deploys', `${deployId}-${Date.now()}`);

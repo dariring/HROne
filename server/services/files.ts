@@ -113,3 +113,52 @@ export function tarStream(abs: string, opts: { skipDeps: boolean }) {
   const child = spawn('tar', args, { stdio: ['ignore', 'pipe', 'ignore'] });
   return { stream: child.stdout, kill: () => child.kill('SIGTERM') };
 }
+
+export interface Owner {
+  uid: number;
+  gid: number;
+}
+
+/** 같은 폴더에 임시 파일로 쓴 뒤 바꿔치기한다 (쓰다가 끊겨도 파일이 반쯤 남지 않게) */
+function atomicWrite(abs: string, text: string, mode: number, owner: Owner) {
+  const tmp = path.join(path.dirname(abs), `.${path.basename(abs)}.hrone-${process.pid}-${Date.now()}`);
+  try {
+    fs.writeFileSync(tmp, text, { mode });
+    fs.chmodSync(tmp, mode);
+    fs.chownSync(tmp, owner.uid, owner.gid);
+    fs.renameSync(tmp, abs);
+  } catch (e) {
+    fs.rmSync(tmp, { force: true });
+    throw e;
+  }
+}
+
+/**
+ * 텍스트 파일 저장. 열었을 때의 수정 시각(mtime)과 지금이 다르면 다른 곳(배포 등)에서 바뀐 것이므로 409.
+ * 원래 파일의 소유자와 권한은 그대로 둔다.
+ */
+export function writeText(rootDir: string, rel: string, text: string, opts: { mtime?: number }) {
+  const { abs, rel: clean } = resolveInside(rootDir, rel);
+  const st = fs.statSync(abs);
+  if (!st.isFile()) throw new HttpError(400, '파일이 아닙니다');
+  if (st.size > PREVIEW_BYTES) throw new HttpError(400, '1MB 가 넘는 파일은 웹에서 고칠 수 없습니다');
+  if (opts.mtime !== undefined && Math.abs(st.mtimeMs - opts.mtime) > 1) {
+    throw new HttpError(409, '파일을 연 뒤에 다른 곳에서 바뀌었습니다 (배포 등). 다시 열어서 고치세요.');
+  }
+  if (Buffer.byteLength(text) > PREVIEW_BYTES * 4) throw new HttpError(400, '내용이 너무 깁니다');
+  atomicWrite(abs, text, st.mode & 0o7777, { uid: st.uid, gid: st.gid });
+  const now = fs.statSync(abs);
+  return { path: clean, size: now.size, mtime: now.mtimeMs };
+}
+
+/** 새 파일 (이미 있으면 409). 소유자는 앱 계정 */
+export function createFile(rootDir: string, dir: string, name: string, owner: Owner) {
+  if (!name || name === '.' || name === '..' || /[/\\\0]/.test(name)) throw new HttpError(400, '파일 이름에 / 는 쓸 수 없습니다');
+  const parent = resolveInside(rootDir, dir);
+  if (!fs.statSync(parent.abs).isDirectory()) throw new HttpError(400, '폴더가 아닙니다');
+  const abs = path.join(parent.abs, name);
+  if (fs.existsSync(abs)) throw new HttpError(409, '같은 이름의 파일이 이미 있습니다');
+  atomicWrite(abs, '', 0o644, owner);
+  const st = fs.statSync(abs);
+  return { path: parent.rel ? `${parent.rel}/${name}` : name, size: 0, mtime: st.mtimeMs };
+}
