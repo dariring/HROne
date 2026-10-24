@@ -1,4 +1,4 @@
-import { Database, Plus } from 'lucide-react';
+import { ChevronRight, Database, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { JobDialog } from '../components/Dialogs';
 import { Badge, Button, Disclosure, Empty, Field, Loading, Modal, Notice, PageHeader, Segmented, StatusBadge, cx, toast } from '../components/ui';
@@ -162,6 +162,9 @@ export function CreateDbModal({ open, onClose }: { open: boolean; onClose: () =>
   );
 }
 
+// 이름 · 상태 · 주소 · 사용량 · 연결된 앱
+const DB_COLS = 'lg:grid-cols-[minmax(0,2fr)_104px_minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.3fr)]';
+
 export function Databases() {
   useTitle('데이터베이스');
   const { query } = useLocation();
@@ -172,7 +175,7 @@ export function Databases() {
     <div>
       <PageHeader
         title="데이터베이스"
-        sub="MariaDB · Redis. DB 마다 따로 실행되고 백업은 매일 자동으로 됩니다"
+        sub={data?.length ? `${data.length}개 · 실행 중 ${data.filter((d) => (live.units[`hrone-db-${d.slug}.service`] ?? d.status)?.state === 'running').length}개 · 백업은 매일 자동` : 'MariaDB · Redis. DB 마다 따로 실행되고 백업은 매일 자동으로 됩니다'}
         actions={
           <Button variant="primary" icon={<Plus size={15} />} onClick={() => setQuery('new', '1')}>
             DB 추가
@@ -188,37 +191,54 @@ export function Databases() {
           </Empty>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
-          {data.map((d) => {
-            const st = live.units[`hrone-db-${d.slug}.service`] ?? d.status;
-            return (
-              <Link key={d.slug} to={`/databases/${d.slug}`} className="card block p-5 transition-colors hover:border-line-2">
-                <div className="flex items-start gap-3">
-                  <DbIcon type={d.type} size={40} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-[15px] font-semibold">{d.name}</span>
-                      {d.job ? <Badge tone="blue">준비 중</Badge> : <StatusBadge state={d.initialized ? st?.state : 'not-deployed'} />}
+        <div className="card overflow-hidden">
+          <div className="hidden items-center gap-4 border-b border-line bg-surface-2/60 px-5 py-2 text-xs font-medium text-muted lg:flex">
+            <div className={cx('grid flex-1 gap-4', DB_COLS)}>
+              <span>이름</span>
+              <span>상태</span>
+              <span>주소</span>
+              <span>사용량</span>
+              <span>연결된 앱</span>
+            </div>
+            <span className="w-[18px]" />
+          </div>
+          <div className="divide-y divide-line">
+            {data.map((d) => {
+              const st = live.units[`hrone-db-${d.slug}.service`] ?? d.status;
+              const status = d.job ? <Badge tone="blue">준비 중</Badge> : !d.initialized ? <Badge tone="red">초기화 실패</Badge> : <StatusBadge state={st?.state} />;
+              const address = `${d.bind === 'local' ? '127.0.0.1' : d.bind === 'all' ? '0.0.0.0' : d.bind}:${d.port}`;
+              const usage = st?.state === 'running' ? `CPU ${pct(st.cpu, 1)} · ${bytes(st.memory)}` : null;
+              const apps = d.linkedApps.length ? d.linkedApps.map((a) => a.name).join(', ') : null;
+              return (
+                <Link key={d.slug} to={`/databases/${d.slug}`} className="flex items-center gap-4 px-5 py-3 transition-colors hover:bg-surface-2/60">
+                  <div className={cx('grid min-w-0 flex-1 items-center gap-x-4 gap-y-1', DB_COLS)}>
+                    <div className="flex min-w-0 items-center gap-3">
+                      <DbIcon type={d.type} size={34} />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate font-semibold">{d.name}</span>
+                          <span className="lg:hidden">{status}</span>
+                        </div>
+                        <div className="truncate text-xs text-muted">
+                          {d.type === 'mariadb' ? 'MariaDB' : 'Redis'} · <span className="mono">{d.slug}</span>
+                        </div>
+                        <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-muted lg:hidden">
+                          <span className="mono">{address}</span>
+                          {usage && <span>{usage}</span>}
+                          {apps && <span>앱: {apps}</span>}
+                        </div>
+                      </div>
                     </div>
-                    <div className="mt-0.5 text-xs text-muted">
-                      {d.type === 'mariadb' ? 'MariaDB' : 'Redis'} · {d.bind === 'local' ? '127.0.0.1' : d.bind === 'all' ? '0.0.0.0' : d.bind}:{d.port}
-                    </div>
+                    <div className="hidden lg:block">{status}</div>
+                    <div className="mono hidden truncate text-[13px] text-fg-2 lg:block">{address}</div>
+                    <div className="hidden text-[13px] text-fg-2 lg:block">{usage ?? <span className="text-muted">-</span>}</div>
+                    <div className="hidden truncate text-[13px] text-fg-2 lg:block">{apps ?? <span className="text-muted">-</span>}</div>
                   </div>
-                </div>
-                <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <div className="text-muted">사용량</div>
-                    <div className="mt-0.5">{st?.state === 'running' ? `CPU ${pct(st.cpu, 1)} · ${bytes(st.memory)}` : '-'}</div>
-                  </div>
-                  <div>
-                    <div className="text-muted">연결된 앱</div>
-                    <div className="mt-0.5 truncate">{d.linkedApps.length ? d.linkedApps.map((a) => a.name).join(', ') : '-'}</div>
-                  </div>
-                </div>
-                {!d.initialized && !d.job && <div className="mt-3 text-xs text-bad">초기화가 끝나지 않았습니다 — 눌러서 다시 시도</div>}
-              </Link>
-            );
-          })}
+                  <ChevronRight size={18} className="shrink-0 text-muted" />
+                </Link>
+              );
+            })}
+          </div>
         </div>
       )}
       <CreateDbModal open={creating} onClose={() => setQuery('new', null)} />
