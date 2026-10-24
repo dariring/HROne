@@ -102,3 +102,19 @@ test('MariaDB 데이터 보기: 배치 출력 파싱과 SQL', async () => {
   assert.equal(browseSql('app', 't', cols, { page: 0, size: 999 }).size, 50);
   assert.throws(() => browseSql('app', 't', cols, { page: 0, size: 25, order: 'nope' }), /없는 컬럼/);
 });
+
+test('MariaDB AppArmor local 규칙: HROne 구역만 바꾸고 다른 줄은 그대로', async () => {
+  const { mariadbAppArmorRules, mergeAppArmorLocal } = await import('../services/packages.ts');
+  const block = mariadbAppArmorRules('/var/lib/hrone/databases');
+  assert.match(block, /^\/var\/lib\/hrone\/databases\/\*\/data\/\*\* rwk,$/m);
+  assert.match(block, /^\/var\/lib\/hrone\/databases\/\*\/my\.cnf r,$/m);
+  const first = mergeAppArmorLocal('', block);
+  assert.equal(first, block);
+  assert.equal(mergeAppArmorLocal(first, block), first, '두 번 써도 같다');
+  const mine = '# 내 규칙\n/srv/x r,\n';
+  const withMine = mergeAppArmorLocal(mine, block);
+  assert.ok(withMine.startsWith(mine) && withMine.endsWith(block));
+  const moved = mergeAppArmorLocal(withMine, mariadbAppArmorRules('/data/hrone/databases'));
+  assert.ok(moved.startsWith(mine));
+  assert.ok(moved.includes('/data/hrone/databases/*/data/** rwk,') && !moved.includes('/var/lib/hrone'));
+});

@@ -1,5 +1,8 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import { run, tryRun, which } from '../lib/exec.ts';
+import { log } from '../lib/log.ts';
+import { PATHS } from '../lib/paths.ts';
 import { KeyedMutex } from '../lib/util.ts';
 
 const mutex = new KeyedMutex();
@@ -65,13 +68,57 @@ export async function mariadbBins(): Promise<MariaBins | null> {
 export function ensureMariadb(onLog: Logger = () => {}) {
   return mutex.run('mariadb', async () => {
     let bins = await mariadbBins();
-    if (bins) return bins;
-    await aptInstall(['mariadb-server', 'mariadb-client'], onLog);
-    await disableDefaultService('mariadb.service');
-    bins = await mariadbBins();
-    if (!bins) throw new Error('MariaDB 설치 후에도 실행 파일을 찾지 못했습니다');
+    if (!bins) {
+      await aptInstall(['mariadb-server', 'mariadb-client'], onLog);
+      await disableDefaultService('mariadb.service');
+      bins = await mariadbBins();
+      if (!bins) throw new Error('MariaDB 설치 후에도 실행 파일을 찾지 못했습니다');
+    }
+    if (await ensureMariadbAppArmor()) onLog('AppArmor: HROne DB 폴더를 mariadbd 프로필에 허용했습니다');
     return bins;
   });
+}
+
+const AA_PROFILE = '/etc/apparmor.d/mariadbd';
+const AA_LOCAL = '/etc/apparmor.d/local/mariadbd';
+
+/** mariadbd AppArmor 프로필에 넣을 HROne 경로 (프로필이 공식으로 열어 둔 local/mariadbd 에 쓴다) */
+export function mariadbAppArmorRules(databasesDir: string) {
+  return [
+    '# >>> HROne (패널이 관리하는 MariaDB 인스턴스 경로. 이 사이는 HROne 이 다시 씁니다)',
+    `${databasesDir}/ r,`,
+    `${databasesDir}/*/ r,`,
+    `${databasesDir}/*/my.cnf r,`,
+    `${databasesDir}/*/data/ r,`,
+    `${databasesDir}/*/data/** rwk,`,
+    '/run/hrone-db-*/ rw,',
+    '/run/hrone-db-*/** rwk,',
+    '# <<< HROne',
+    '',
+  ].join('\n');
+}
+
+/** 기존 local 파일에서 HROne 구역만 바꾼다 (사용자가 넣은 다른 줄은 그대로) */
+export function mergeAppArmorLocal(current: string, block: string) {
+  const re = /# >>> HROne[^\n]*\n[\s\S]*?# <<< HROne\n?/;
+  if (re.test(current)) return current.replace(re, block);
+  return current + (current && !current.endsWith('\n') ? '\n' : '') + block;
+}
+
+/**
+ * Ubuntu 26.04 부터 mariadb-server 가 강제 모드 AppArmor 프로필(mariadbd)을 같이 설치해서
+ * /var/lib/mysql 밖의 데이터 폴더(우리 /var/lib/hrone/databases/*)를 읽지 못한다. 바뀐 게 있을 때만 다시 불러온다.
+ */
+export async function ensureMariadbAppArmor() {
+  if (!fs.existsSync(AA_PROFILE)) return false;
+  const current = fs.existsSync(AA_LOCAL) ? fs.readFileSync(AA_LOCAL, 'utf8') : '';
+  const next = mergeAppArmorLocal(current, mariadbAppArmorRules(PATHS.databases));
+  if (next === current) return false;
+  fs.mkdirSync(path.dirname(AA_LOCAL), { recursive: true });
+  fs.writeFileSync(AA_LOCAL, next);
+  const r = await tryRun('apparmor_parser', ['-r', '-T', '-W', AA_PROFILE]);
+  if (r.code !== 0) log.warn(`AppArmor 프로필을 다시 불러오지 못했습니다: ${(r.stderr || r.stdout).trim()}`);
+  return true;
 }
 
 export interface RedisBins {

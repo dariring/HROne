@@ -11,6 +11,7 @@ import type { BackupSchedule, Db, DbConfig, DbSecrets, DbType, MariaLimits, Redi
 import { assertSlug, clampInt, HttpError, KeyedMutex, rmrf } from '../../lib/util.ts';
 import { listeningPorts, normalizeResources, usedPorts } from '../apps.ts';
 import * as journal from '../journal.ts';
+import { ensureMariadbAppArmor } from '../packages.ts';
 import { startJob } from '../jobs.ts';
 import * as systemd from '../systemd.ts';
 import {
@@ -129,7 +130,11 @@ export function initialize(slug: string) {
 
 export async function writeRuntime(db: Db) {
   const s = dbSecrets(db.slug);
-  if (db.type === 'mariadb') maria.writeConfig(db);
+  if (db.type === 'mariadb') {
+    // 패널이 켜질 때마다 불리므로, 이미 있는 서버도 업데이트만으로 AppArmor 설정이 맞춰진다
+    await ensureMariadbAppArmor();
+    maria.writeConfig(db);
+  }
   else await redis.writeConfig(db, s);
   const unit = db.type === 'mariadb' ? await maria.unitContent(db) : await redis.unitContent(db);
   if (systemd.writeUnit(unitOf(db.slug), unit)) await systemd.daemonReload();

@@ -361,7 +361,10 @@ export function buildEnv(app: App, opts: { forBuild?: boolean } = {}): Record<st
     if (app.config.allowInstallScripts) {
       // npm 11 의 allowScripts / pnpm 10 의 onlyBuiltDependencies 기본 차단을 끈다 (앱 전용 계정으로 실행됨)
       env.npm_config_dangerously_allow_all_scripts = env.npm_config_dangerously_allow_all_scripts ?? 'true';
-      env.npm_config_dangerously_allow_all_builds = env.npm_config_dangerously_allow_all_builds ?? 'true';
+      // pnpm 전용 설정이라 npm 에 넘기면 "Unknown env config" 경고가 나온다
+      if (fs.existsSync(path.join(workDir(app), 'pnpm-lock.yaml'))) {
+        env.npm_config_dangerously_allow_all_builds = env.npm_config_dangerously_allow_all_builds ?? 'true';
+      }
     }
   }
   return env;
