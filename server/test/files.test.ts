@@ -122,3 +122,26 @@ test('API: 폴더는 tar.gz 로, 기본은 node_modules 제외', async () => {
   assert.ok(downloads.includes('/'));
   assert.ok(downloads.includes('data/app.db'));
 });
+
+test('웹 UI: index.html 은 캐시하지 않고 assets 는 오래 캐시', async () => {
+  const { registerWeb } = await import('../http/web.ts');
+  const dist = path.join(tmp, 'dist');
+  fs.mkdirSync(path.join(dist, 'assets'), { recursive: true });
+  fs.writeFileSync(path.join(dist, 'index.html'), '<!doctype html><title>t</title>');
+  fs.writeFileSync(path.join(dist, 'assets', 'index-abc.js'), 'x');
+  fs.writeFileSync(path.join(dist, 'favicon.svg'), '<svg/>');
+  const web = Fastify();
+  await registerWeb(web, dist);
+  await web.ready();
+  const get = (u: string) => web.inject(u);
+  for (const u of ['/', '/apps/my-bot', '/index.html']) {
+    const r = await get(u);
+    assert.equal(r.statusCode, 200, u);
+    assert.equal(r.headers['cache-control'], 'no-cache', u);
+    assert.match(r.body, /<title>t<\/title>/);
+  }
+  assert.equal((await get('/assets/index-abc.js')).headers['cache-control'], 'public, max-age=31536000, immutable');
+  assert.equal((await get('/favicon.svg')).headers['cache-control'], 'public, max-age=3600');
+  assert.equal((await get('/api/nope')).statusCode, 404);
+  await web.close();
+});

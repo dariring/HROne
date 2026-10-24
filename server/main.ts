@@ -1,10 +1,9 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import cookie from '@fastify/cookie';
-import fastifyStatic from '@fastify/static';
 import websocket from '@fastify/websocket';
 import Fastify from 'fastify';
 import { clientIp, ipAllowed, loadSession } from './http/auth.ts';
+import { registerWeb } from './http/web.ts';
 import { registerApps } from './http/routes/apps.ts';
 import { registerAuth } from './http/routes/auth.ts';
 import { registerDatabases } from './http/routes/databases.ts';
@@ -99,15 +98,7 @@ registerDatabases(server);
 registerSystem(server);
 registerWs(server);
 
-if (fs.existsSync(path.join(PATHS.webDist, 'index.html'))) {
-  await server.register(fastifyStatic, { root: PATHS.webDist, wildcard: false, maxAge: '1h' });
-}
-server.setNotFoundHandler((req, reply) => {
-  if (req.url.startsWith('/api/')) return reply.code(404).send({ error: '없는 API 입니다' });
-  const index = path.join(PATHS.webDist, 'index.html');
-  if (!fs.existsSync(index)) return reply.code(503).type('text/plain; charset=utf-8').send('웹 UI 가 빌드되지 않았습니다 (npm run build)');
-  return reply.header('cache-control', 'no-cache').type('text/html; charset=utf-8').send(fs.readFileSync(index));
-});
+await registerWeb(server, PATHS.webDist);
 
 // ---------- 시작 시 정리 ----------
 
