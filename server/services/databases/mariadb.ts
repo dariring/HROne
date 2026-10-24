@@ -6,6 +6,7 @@ import type { Db, DbSecrets, MariaLimits } from '../../lib/types.ts';
 import { HttpError, sleep, writeFileIfChanged } from '../../lib/util.ts';
 import { ensureMariadb, mariadbBins, type MariaBins } from '../packages.ts';
 import * as systemd from '../systemd.ts';
+import { identity } from '../users.ts';
 import { bindAddress, dataDir, runDir, unitOf } from './common.ts';
 
 type Logger = (l: string) => void;
@@ -167,16 +168,13 @@ export async function init(db: Db, secrets: DbSecrets, onLog: Logger) {
     await run('chown', ['-R', 'mysql:mysql', dir]);
     fs.chmodSync(dir, 0o750);
     onLog('데이터 폴더 초기화 (mariadb-install-db)...');
+    // mysql 계정으로 바로 실행한다. root 로 띄우고 --user=mysql 로 내려가게 하면 root 권한(dac_override 등)이
+    // 필요한데, Ubuntu 26.04 의 mariadbd AppArmor 프로필은 그 권한을 막는다 (서비스도 User=mysql 로 돈다)
+    const mysql = identity('mysql', dir);
     await run(
       b.installDb,
-      [
-        `--defaults-file=${cnfPath(db.slug)}`,
-        '--user=mysql',
-        `--datadir=${dir}`,
-        '--auth-root-authentication-method=socket',
-        '--skip-test-db',
-      ],
-      { onLine: (l) => l.trim() && onLog(l), timeoutMs: 10 * 60_000 },
+      [`--defaults-file=${cnfPath(db.slug)}`, `--datadir=${dir}`, '--auth-root-authentication-method=socket', '--skip-test-db'],
+      { onLine: (l) => l.trim() && onLog(l), timeoutMs: 10 * 60_000, uid: mysql.uid, gid: mysql.gid, cwd: dir, env: { HOME: dir } },
     );
   }
   systemd.writeUnit(unitOf(db.slug), await unitContent(db));
