@@ -235,11 +235,15 @@ EOF
     printf ' (로그인하면 홈 화면의 "시작하기" 목록이 다음 할 일을 알려 줍니다)\n'
   fi
   printf '\n 다음 단계:\n'
+  # 이미 설치된 것은 빼고 번호를 매긴다
+  local n=0
   if ! command -v tailscale >/dev/null 2>&1; then
-    printf '   1) Tailscale:   curl -fsSL https://tailscale.com/install.sh | sh && sudo tailscale up\n'
+    n=$((n + 1))
+    printf '   %d) Tailscale:   curl -fsSL https://tailscale.com/install.sh | sh && sudo tailscale up\n' "$n"
   fi
   if ! command -v cloudflared >/dev/null 2>&1; then
-    printf '   2) cloudflared: 앱 포트(127.0.0.1:PORT)를 터널 public hostname 에 연결\n'
+    n=$((n + 1))
+    printf '   %d) cloudflared: 앱 포트(127.0.0.1:PORT)를 터널 public hostname 에 연결\n' "$n"
   fi
   printf '   관리 명령:      hrone help\n'
   printf '\033[1;32m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m\n'
