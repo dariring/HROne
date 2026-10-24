@@ -36,6 +36,12 @@ test('저장소 주소 정규화', () => {
   assert.throws(() => normalizeRepoUrl('not a url', 'none'));
 });
 
+test('설정의 GitHub 토큰은 GitHub 주소에만', async () => {
+  const { isGithubUrl } = await import('../services/git.ts');
+  for (const u of ['dariring/HROne', 'https://github.com/a/b.git', 'git@github.com:a/b.git', 'ssh://git@github.com/a/b.git', 'https://x-access-token@github.com/a/b']) assert.ok(isGithubUrl(u), u);
+  for (const u of ['http://127.0.0.1:18080/app.git', 'https://gitea.example.com/a/b.git', 'https://github.com.evil.io/a/b', 'git@gitlab.com:a/b.git', 'https://evil.io/github.com/a']) assert.ok(!isGithubUrl(u), u);
+});
+
 test('systemd EnvironmentFile / ExecStart 이스케이프', () => {
   assert.equal(envFileLine('A', 'x "y" $HOME \\ `z`'), 'A="x \\"y\\" \\$HOME \\\\ \\`z\\`"');
   assert.equal(execShell('node -e "console.log(1)" 100%'), '/bin/bash -c "node -e \\"console.log(1)\\" 100%%"');

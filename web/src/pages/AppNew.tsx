@@ -46,6 +46,11 @@ function slugFrom(s: string) {
     .replace(/-+$/, '');
 }
 
+/** owner/repo 또는 github.com 주소 */
+function isGithub(url: string) {
+  return /^[\w.-]+\/[\w.-]+$/.test(url) || /^(https:\/\/(www\.)?github\.com\/|(ssh:\/\/)?git@github\.com[:/])/i.test(url);
+}
+
 function repoName(url: string) {
   return url.trim().replace(/\.git$/, '').replace(/\/+$/, '').split(/[/:]/).pop() ?? '';
 }
@@ -136,8 +141,8 @@ export function AppNew() {
       try {
         r = await runInspect(url, a, br);
       } catch (e) {
-        // 공개로 안 열리면, 설정에 넣어 둔 GitHub 토큰으로 한 번 더 시도한다
-        if (a !== 'none' || !settings?.githubTokenSet) throw e;
+        // 공개로 안 열리면, 설정에 넣어 둔 GitHub 토큰으로 한 번 더 시도한다 (GitHub 주소일 때만)
+        if (a !== 'none' || !settings?.githubTokenSet || !isGithub(url)) throw e;
         a = 'token';
         r = await runInspect(url, a, br);
       }
@@ -321,7 +326,7 @@ export function AppNew() {
                       variant="primary"
                       size="sm"
                       loading={checking}
-                      disabled={auth === 'deploykey' ? !key : !gitToken && !settings?.githubTokenSet}
+                      disabled={auth === 'deploykey' ? !key : !gitToken && !(settings?.githubTokenSet && isGithub(repoUrl.trim()))}
                       onClick={() => check({ auth: auth === 'deploykey' ? 'deploykey' : 'token' })}
                     >
                       이 방법으로 다시 확인

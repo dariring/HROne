@@ -141,7 +141,7 @@ export function AppSettings({ app, me, reload }: { app: AppDetailData; me: Me; r
           </Field>
         </div>
         {c.auth === 'token' && (
-          <Field label="이 앱 전용 GitHub 토큰" hint={secrets?.gitTokenSet ? '설정되어 있습니다. 새 값을 넣으면 바뀝니다 (비우고 저장하면 설정의 기본 토큰 사용).' : '비우면 설정 → GitHub · 알림의 기본 토큰을 씁니다.'}>
+          <Field label="이 앱 전용 GitHub 토큰" hint={secrets?.gitTokenSet ? '설정되어 있습니다. 새 값을 넣으면 바뀝니다 (비우고 저장하면 설정의 기본 토큰 사용).' : '비우면 설정 → GitHub · 알림의 토큰을 씁니다 (github.com 저장소일 때만).'}>
             <div className="flex gap-2">
               <input className="input mono" type="password" value={token} onChange={(e) => setToken(e.target.value)} placeholder={secrets?.gitTokenSet ? '••••••••' : 'github_pat_...'} autoComplete="off" />
               <Button loading={busy === 'token'} onClick={() => run('token', () => api.put(`/api/apps/${app.slug}/secrets`, { gitToken: token }).then(() => (setToken(''), reloadSecrets())), '토큰을 저장했습니다')}>

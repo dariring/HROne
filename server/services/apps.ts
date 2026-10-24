@@ -12,7 +12,7 @@ import type { App, AppConfig, AppRow, AppSecrets, EnvVar } from '../lib/types.ts
 import { assertSlug, clampInt, HttpError, KeyedMutex, rmrf, writeFileIfChanged } from '../lib/util.ts';
 import { linkedEnvFor, linkedUnitsFor } from './databases/links.ts';
 import type { GitAuth } from './git.ts';
-import { normalizeRepoUrl } from './git.ts';
+import { isGithubUrl, normalizeRepoUrl } from './git.ts';
 import * as journal from './journal.ts';
 import { matchInstalledNode } from './runtimes.ts';
 import * as systemd from './systemd.ts';
@@ -311,7 +311,8 @@ export async function ensureAppIdentity(app: App): Promise<Identity> {
 
 export function gitAuthFor(app: App): GitAuth {
   if (app.config.auth === 'token') {
-    const token = getSecrets(app.slug).gitToken || settings.githubToken();
+    // 설정의 GitHub 토큰은 github.com 저장소에만 쓴다
+    const token = getSecrets(app.slug).gitToken || (isGithubUrl(app.config.repoUrl) ? settings.githubToken() : '');
     return { type: 'token', token };
   }
   if (app.config.auth === 'deploykey') return { type: 'deploykey', keyPath: keyPath(app.slug) };

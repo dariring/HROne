@@ -76,8 +76,8 @@ const tmpKeyPath = (id: string) => {
   return path.join(PATHS.tmp, 'keys', id);
 };
 
-function inspectAuth(b: Body): git.GitAuth {
-  if (b.auth === 'token') return { type: 'token', token: String(b.gitToken || '') || settings.githubToken() };
+function inspectAuth(b: Body, url: string): git.GitAuth {
+  if (b.auth === 'token') return { type: 'token', token: String(b.gitToken || '') || (git.isGithubUrl(url) ? settings.githubToken() : '') };
   if (b.auth === 'deploykey') return { type: 'deploykey', keyPath: tmpKeyPath(String(b.keyId ?? '')) };
   return { type: 'none' };
 }
@@ -117,7 +117,7 @@ export function registerApps(server: FastifyInstance) {
     const b = (req.body ?? {}) as Body;
     const authType = (['none', 'token', 'deploykey'].includes(b.auth) ? b.auth : 'none') as git.GitAuth['type'];
     const url = git.normalizeRepoUrl(String(b.repoUrl ?? ''), authType);
-    const auth = inspectAuth({ ...b, auth: authType });
+    const auth = inspectAuth({ ...b, auth: authType }, url);
     const id = rootIdentity();
     const { branches, defaultBranch } = await git.listBranches(url, { id, auth });
     const branch = String(b.branch || defaultBranch);

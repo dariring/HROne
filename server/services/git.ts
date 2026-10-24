@@ -40,6 +40,12 @@ export function normalizeRepoUrl(input: string, authType: GitAuth['type']): stri
   return authType === 'deploykey' ? `git@${host}:${repoPath}.git` : `${scheme}://${host}/${repoPath}.git`;
 }
 
+/** github.com 저장소인지. 설정의 GitHub 토큰은 GitHub 에만 보낸다 (다른 호스트로 새지 않게) */
+export function isGithubUrl(url: string) {
+  const s = url.trim();
+  return /^[\w.-]+\/[\w.-]+$/.test(s) || /^(?:https:\/\/(?:[^@/]+@)?github\.com\/|(?:ssh:\/\/)?git@github\.com[:/])/i.test(s);
+}
+
 export function repoWebUrl(url: string) {
   const m = url.match(/^https?:\/\/([^/]+)\/(.+?)(\.git)?$/) ?? url.match(/^git@([^:]+):(.+?)(\.git)?$/);
   return m ? `${url.startsWith('http://') ? 'http' : 'https'}://${m[1]}/${m[2]}` : '';
